@@ -22,11 +22,11 @@ jobs:
         include:
           - app: Excel
             repository: CaioRods/Excel-AW
-            revision: a0b7b98110508b2876c8ab719212dd7571efc250
+            revision: 5bfb07bd7a9400fc26051bdb9263d87982e33980
             package: gridcraft
           - app: Word
             repository: CaioRods/Word-AW
-            revision: b6d353903e3839a3260ce96df86114631fc2d425
+            revision: fa4f7c39ddcf484ad40fca21e204c3896372a8bb
             package: wordcraft
     steps:
       - uses: actions/checkout@v4
@@ -78,6 +78,7 @@ jobs:
           $msi = @(Get-ChildItem dist/release -Filter '${{ matrix.package }}-*-windows-x64.msi')
           if ($msi.Count -ne 1) { throw 'Esperava exatamente um MSI x64.' }
           Copy-Item $msi[0].FullName "$env:RUNNER_TEMP\${{ matrix.app }}-AW-x64.msi"
+          ../central/launcher/test-msi.ps1 -Package $msi[0].FullName -Name "${{ matrix.app }} AW"
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.app }}-AW-x64

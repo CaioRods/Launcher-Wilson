@@ -4,8 +4,20 @@ using System.IO;
 internal static class DistributionTests
 {
     private static void Check(bool value) { if (!value) throw new Exception("Distribution regression"); }
-    public static void Main()
+    public static void Main(string[] args)
     {
+        if (args.Length == 2)
+        {
+            int app = int.Parse(args[0]);
+            Check(string.Equals(Distribution.InstalledPath(app), args[1], StringComparison.OrdinalIgnoreCase));
+            Version version = Distribution.InstalledVersion(app, false);
+            Check(version.Major == Distribution.BundledUpdate(app).Version.Major && version.Minor == Distribution.BundledUpdate(app).Version.Minor
+                && version.Build == Distribution.BundledUpdate(app).Version.Build);
+            Check(Distribution.ChooseUpdate(app, version, true, null) == null);
+            Check(Distribution.ButtonText(app, true, false).StartsWith("Abrir "));
+            Console.WriteLine("Installed app is detected and offers Abrir.");
+            return;
+        }
         Check(Distribution.ButtonText(0, false, false) == "Instalar Excel AW");
         Check(Distribution.ButtonText(0, true, false) == "Abrir Excel AW");
         Check(Distribution.ButtonText(1, true, false) == "Abrir Word AW");
