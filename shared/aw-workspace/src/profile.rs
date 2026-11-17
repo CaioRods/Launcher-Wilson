@@ -15,6 +15,8 @@ pub struct Profile {
     #[serde(skip)]
     baseline: Option<u64>,
     #[serde(skip)]
+    sharing: bool,
+    #[serde(skip)]
     next_poll: Option<web_time::Instant>,
     #[serde(skip)]
     stamp: Option<(std::time::SystemTime, u64)>,
@@ -29,7 +31,15 @@ pub enum Slot {
 
 impl Profile {
     /// Both AW apps share this local Windows-user profile; document content is never stored here.
+    /// Native hosts opt in after loading preferences; tests and embedded editors stay isolated.
+    pub fn enable_sharing(&mut self) {
+        self.sharing = true;
+    }
+
     pub fn sync(&mut self) -> bool {
+        if !self.sharing {
+            return false;
+        }
         #[cfg(not(target_arch = "wasm32"))]
         {
             let now = web_time::Instant::now();
@@ -64,6 +74,7 @@ impl Profile {
                 Ok(mut loaded) => {
                     let changed = self.baseline.is_none() || loaded.fingerprint() != current;
                     loaded.next_poll = self.next_poll;
+                    loaded.sharing = self.sharing;
                     loaded.stamp = stamp;
                     loaded.baseline = Some(loaded.fingerprint());
                     *self = loaded;
@@ -128,6 +139,9 @@ impl Profile {
 
     /// Flush a final edit before the host saves preferences or exits.
     pub fn flush_shared(&self) -> Result<(), String> {
+        if !self.sharing {
+            return Ok(());
+        }
         #[cfg(not(target_arch = "wasm32"))]
         if self.baseline.is_some_and(|baseline| baseline != self.fingerprint())
             && let Some(path) = shared_path()
@@ -299,6 +313,14 @@ pub fn card(ui: &mut Ui, profile: &mut Profile, name: &mut String, portuguese: b
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn embedded_editor_does_not_read_or_write_the_native_profile() {
+        let mut profile = Profile { name: "Isolated test".into(), ..Default::default() };
+        assert!(!profile.sync());
+        assert!(profile.baseline.is_none());
+        assert!(profile.flush_shared().is_ok());
+    }
 
     #[test]
     fn two_running_apps_receive_profile_updates_and_removals() {
