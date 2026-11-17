@@ -27,11 +27,11 @@ jobs:
         include:
           - app: Excel
             repository: CaioRods/Excel-AW
-            revision: 72a0287df15227c77a343c5600aff7c8944e0fde
+            revision: 04a7bf9abc130ac13ba272f246b265d9661133cf
             package: gridcraft
           - app: Word
             repository: CaioRods/Word-AW
-            revision: fa4f7c39ddcf484ad40fca21e204c3896372a8bb
+            revision: db33f26763a03832d9ef6ecb3ff4f9c24e24084a
             package: wordcraft
     steps:
       - uses: actions/checkout@v4
