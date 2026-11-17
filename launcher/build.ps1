@@ -15,3 +15,13 @@ if ($LASTEXITCODE -ne 0) { throw 'Falha ao compilar a Central de Apps.' }
 $smoke = Start-Process -FilePath $exe -ArgumentList '--smoke-test' -Wait -PassThru
 if ($smoke.ExitCode -ne 0) { throw "A Central de Apps falhou ao inicializar ($($smoke.ExitCode))." }
 Copy-Item -LiteralPath "$PSScriptRoot\LEIA-ME.txt" -Destination $root
+
+$tests = Join-Path $env:TEMP ('Wilson-distribution-tests-' + [guid]::NewGuid().ToString('N') + '.exe')
+try {
+    & $compiler /nologo /target:exe /reference:System.Web.Extensions.dll "/out:$tests" "$PSScriptRoot/Distribution.cs" "$PSScriptRoot/tests/DistributionTests.cs"
+    if ($LASTEXITCODE -ne 0) { throw 'Falha ao compilar os testes de distribuição.' }
+    & $tests
+    if ($LASTEXITCODE -ne 0) { throw 'Falha nos testes de distribuição.' }
+} finally {
+    Remove-Item -LiteralPath $tests -ErrorAction SilentlyContinue
+}

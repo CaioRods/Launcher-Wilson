@@ -72,6 +72,8 @@ internal sealed class Central : Form
         word.Click += async (s, e) => await Install(1);
         both.Click += async (s, e) => await Install(0, 1);
         check.Click += async (s, e) => await CheckUpdates();
+        RefreshButtons();
+        Activated += (s, e) => { if (!busy) RefreshButtons(); };
         FormClosing += (s, e) => { if (busy) e.Cancel = true; };
         if (SystemInformation.IsMenuAnimationEnabled && !SystemInformation.HighContrast)
         {
@@ -112,15 +114,18 @@ internal sealed class Central : Form
 
     private void RefreshButtons()
     {
-        excel.Text = Candidate(0) == null ? "Instalar Excel AW" : "Atualizar Excel AW";
-        word.Text = Candidate(1) == null ? "Instalar Word AW" : "Atualizar Word AW";
-        both.Text = Candidate(0) == null && Candidate(1) == null ? "Instalar os dois" : "Instalar / atualizar os dois";
+        bool first = Distribution.InstalledPath(0) != null;
+        bool second = Distribution.InstalledPath(1) != null;
+        excel.Text = Distribution.ButtonText(0, first, Candidate(0) != null);
+        word.Text = Distribution.ButtonText(1, second, Candidate(1) != null);
+        both.Text = Candidate(0) != null || Candidate(1) != null ? "Instalar / atualizar os dois"
+            : first && second ? "Abrir os dois" : first || second ? "Instalar o aplicativo restante" : "Instalar os dois";
     }
 
     private Update Candidate(int app)
     {
-        var update = updates[app];
-        return update != null && update.Version > Distribution.InstalledVersion(app, machine.Checked) ? update : null;
+        return Distribution.ChooseUpdate(app, Distribution.InstalledVersion(app, machine.Checked),
+            Distribution.InstalledPath(app) != null, updates[app]);
     }
 
     private async Task CheckUpdates()
@@ -152,17 +157,30 @@ internal sealed class Central : Form
         bool restart = false;
         int finished = 0;
         string appName = "";
+        bool openExisting = Distribution.InstalledPath(0) != null && Distribution.InstalledPath(1) != null
+            && Candidate(0) == null && Candidate(1) == null;
         try
         {
             foreach (int app in apps)
             {
                 appName = Distribution.Names[app];
                 Update update = Candidate(app);
+                string installed = Distribution.InstalledPath(app);
+                if (update == null && installed != null)
+                {
+                    // Batch installation skips an app already installed; once both are installed it opens both.
+                    if (apps.Length == 1 || openExisting)
+                    {
+                        Process.Start(new ProcessStartInfo(installed) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(installed) });
+                    }
+                    finished++;
+                    continue;
+                }
                 string folder = null;
                 try
                 {
                     string path = Distribution.LocalPath(app);
-                    if (update != null)
+                    if (update != null && update.Url != null)
                     {
                         status.Text = "Baixando e verificando " + appName + " " + update.Version + "…";
                         folder = Path.Combine(Path.GetTempPath(), "Wilson-" + Guid.NewGuid().ToString("N"));
@@ -196,7 +214,7 @@ internal sealed class Central : Form
                     }
                 }
             }
-            status.Text = apps.Length == 2 ? "Excel AW e Word AW instalados." : appName + " instalado.";
+            status.Text = "Pronto. Use os botões Abrir para acessar seus aplicativos.";
         }
         catch (System.ComponentModel.Win32Exception error)
         {

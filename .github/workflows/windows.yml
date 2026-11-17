@@ -1,12 +1,18 @@
 name: Central Alimentos Wilson
 on:
   workflow_dispatch:
+    inputs:
+      central_only:
+        description: Compilar e testar somente o launcher
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
   installers:
+    if: ${{ !inputs.central_only }}
     name: Instalador ${{ matrix.app }}
     runs-on: windows-2022
     timeout-minutes: 90
@@ -96,6 +102,7 @@ jobs:
           if-no-files-found: error
 
   bundle:
+    if: ${{ !inputs.central_only }}
     name: Montar o ZIP final
     needs: [installers, central]
     runs-on: windows-2022
