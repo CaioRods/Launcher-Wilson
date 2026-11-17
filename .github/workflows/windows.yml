@@ -1,0 +1,122 @@
+name: Central Alimentos Wilson
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  installers:
+    name: Instalador ${{ matrix.app }}
+    runs-on: windows-2022
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: Excel
+            repository: CaioRods/Excel-AW
+            revision: a0b7b98110508b2876c8ab719212dd7571efc250
+            package: gridcraft
+          - app: Word
+            repository: CaioRods/Word-AW
+            revision: b6d353903e3839a3260ce96df86114631fc2d425
+            package: wordcraft
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: central
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.repository }}
+          ref: ${{ matrix.revision }}
+          path: app
+          persist-credentials: false
+      - if: matrix.app == 'Word'
+        uses: actions/checkout@v4
+        with:
+          repository: storytold/craft-i18n
+          ref: 1e515422afdda2f317af430c1f9d68a5f83935b4
+          path: craft-i18n
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: storytold/craft-fonts
+          ref: b076417b5880bd4154bd22f00695b1d28c6bea83
+          path: craft-fonts
+          persist-credentials: false
+      - name: Preparar compilação x64
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal --target x86_64-pc-windows-msvc
+          dotnet tool install --global wix --version 5.0.2
+          wix extension add -g WixToolset.UI.wixext/5.0.2
+          wix extension add -g WixToolset.Util.wixext/5.0.2
+      - name: Gerar MSI
+        working-directory: app
+        env:
+          RUSTUP_TOOLCHAIN: 1.95.0
+          CARGO_PROFILE_RELEASE_LTO: 'false'
+          CRAFT_FONTS_DIR: ${{ github.workspace }}\craft-fonts
+          CRAFT_FONTS_REQUIRED: '1'
+        run: |
+          if ('${{ matrix.app }}' -eq 'Word') {
+            $env:CRAFT_I18N_DIR = "$env:GITHUB_WORKSPACE\craft-i18n"
+            $env:CRAFT_I18N_REQUIRED = '1'
+            if ((Get-Content craft-i18n.rev -Raw).Trim() -ne (git -C $env:CRAFT_I18N_DIR rev-parse HEAD)) {
+              throw 'A revisão do catálogo de idiomas diverge do Word AW.'
+            }
+          }
+          ../central/launcher/brand-msi.ps1 -Source . -App '${{ matrix.app }}'
+          ./packaging/windows/package.ps1 -Arch x64
+          $msi = @(Get-ChildItem dist/release -Filter '${{ matrix.package }}-*-windows-x64.msi')
+          if ($msi.Count -ne 1) { throw 'Esperava exatamente um MSI x64.' }
+          Copy-Item $msi[0].FullName "$env:RUNNER_TEMP\${{ matrix.app }}-AW-x64.msi"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.app }}-AW-x64
+          path: ${{ runner.temp }}/${{ matrix.app }}-AW-x64.msi
+          if-no-files-found: error
+
+  central:
+    name: Compilar a central
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compilar e testar inicialização
+        run: |
+          New-Item -ItemType Directory central | Out-Null
+          ./launcher/build.ps1 -Destination central
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Central-executavel
+          path: central/
+          if-no-files-found: error
+
+  bundle:
+    name: Montar o ZIP final
+    needs: [installers, central]
+    runs-on: windows-2022
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Central-executavel
+          path: pacote
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: '*-AW-x64'
+          path: pacote/instaladores
+          merge-multiple: true
+      - name: Verificar o conteúdo e montar pacote
+        run: |
+          foreach ($app in @('Excel','Word')) {
+            if (!(Test-Path "pacote/instaladores/$app-AW-x64.msi" -PathType Leaf)) { throw "MSI ausente: $app AW" }
+          }
+          Compress-Archive -Path pacote/* -DestinationPath Alimentos-Wilson-Windows-x64.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Alimentos-Wilson-Windows-x64
+          path: Alimentos-Wilson-Windows-x64.zip
+          if-no-files-found: error

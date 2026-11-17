@@ -1,0 +1,16 @@
+CENTRAL DE APPS ALIMENTOS WILSON
+
+1. Extraia todo o ZIP em uma pasta no computador.
+2. Abra Alimentos Wilson.exe.
+3. Escolha um aplicativo ou clique em Instalar os dois.
+
+Com a opção para todos os usuários desligada, a central instala no perfil atual.
+Para instalar para todo o computador, ligue a opção e confirme a permissão de administrador.
+As políticas de TI do computador continuam valendo para os dois modos.
+
+Buscar atualizações consulta o GitHub. Quando houver um pacote MSI x64 validado
+em uma versão publicada, a central oferece a atualização de cada app.
+O pacote inicial permite instalar sem internet.
+
+Windows 10 ou 11, 64 bits (x64).
+Os arquivos MSI também podem ser abertos diretamente na pasta instaladores.
