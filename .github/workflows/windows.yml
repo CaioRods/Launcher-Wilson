@@ -6,9 +6,14 @@ on:
         description: Compilar e testar somente o launcher
         type: boolean
         default: false
+      reuse_word_run:
+        description: Execução anterior com o MSI Word AW validado
+        type: string
+        default: ''
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   installers:
@@ -22,7 +27,7 @@ jobs:
         include:
           - app: Excel
             repository: CaioRods/Excel-AW
-            revision: 5bfb07bd7a9400fc26051bdb9263d87982e33980
+            revision: 72a0287df15227c77a343c5600aff7c8944e0fde
             package: gridcraft
           - app: Word
             repository: CaioRods/Word-AW
@@ -53,12 +58,14 @@ jobs:
           path: craft-fonts
           persist-credentials: false
       - name: Preparar compilação x64
+        if: matrix.app != 'Word' || inputs.reuse_word_run == ''
         run: |
           rustup toolchain install 1.95.0 --profile minimal --target x86_64-pc-windows-msvc
           dotnet tool install --global wix --version 5.0.2
           wix extension add -g WixToolset.UI.wixext/5.0.2
           wix extension add -g WixToolset.Util.wixext/5.0.2
       - name: Gerar MSI
+        if: matrix.app != 'Word' || inputs.reuse_word_run == ''
         working-directory: app
         env:
           RUSTUP_TOOLCHAIN: 1.95.0
@@ -78,7 +85,15 @@ jobs:
           $msi = @(Get-ChildItem dist/release -Filter '${{ matrix.package }}-*-windows-x64.msi')
           if ($msi.Count -ne 1) { throw 'Esperava exatamente um MSI x64.' }
           Copy-Item $msi[0].FullName "$env:RUNNER_TEMP\${{ matrix.app }}-AW-x64.msi"
-          ../central/launcher/test-msi.ps1 -Package $msi[0].FullName -Name "${{ matrix.app }} AW"
+      - uses: actions/download-artifact@v4
+        if: matrix.app == 'Word' && inputs.reuse_word_run != ''
+        with:
+          name: Word-AW-x64
+          run-id: ${{ inputs.reuse_word_run }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}
+      - name: Validar instalação e reconhecimento
+        run: ./central/launcher/test-msi.ps1 -Package "$env:RUNNER_TEMP\${{ matrix.app }}-AW-x64.msi" -Name "${{ matrix.app }} AW"
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.app }}-AW-x64
