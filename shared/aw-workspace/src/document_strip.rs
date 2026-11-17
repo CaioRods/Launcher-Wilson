@@ -224,6 +224,16 @@ mod tests {
     }
 
     #[test]
+    fn active_tab_is_light_and_compact_even_with_dark_global_visuals() {
+        let ctx = egui::Context::default();
+        ctx.set_visuals(egui::Visuals::dark());
+        let (_, shapes) = frame(&ctx, &[(1, "First".into(), true)], vec![]);
+        let title = text_at(&shapes, "First");
+        assert!(title.y < 32.0);
+        assert!(shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::Rect(rect) if rect.fill == egui::Color32::WHITE && rect.rect.contains(title) && rect.rect.height() == 32.0)));
+    }
+
+    #[test]
     fn pointer_drag_reorders_tabs() {
         let ctx = egui::Context::default();
         let entries = vec![(1, "First".into(), true), (2, "Second".into(), false)];
