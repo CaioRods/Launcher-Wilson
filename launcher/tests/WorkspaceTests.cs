@@ -87,8 +87,17 @@ internal static class WorkspaceTests
                                 exe=Distribution.InstalledPath(0);
                                 using(var forwarded=Process.Start(new ProcessStartInfo(exe,SuiteHost.Quote(excel)){UseShellExecute=false}))
                                     Require(forwarded.WaitForExit(5000)&&forwarded.ExitCode==0,"standalone Excel must hand an existing file to AWcontrol and exit");
+                                // The transport ACK means queued, not yet applied by this UI thread.
+                                // Return to the message loop before testing suite closure, so the last
+                                // file-open request cannot intentionally cancel a simultaneous close.
+                                phase=7;since.Restart();return;
                             }
                             Capture(host,real?"real-files":"files");phase=6;Console.WriteLine("Closing suite");host.Close();return;
+                        }
+                        if(phase==7 && host.ActivePage!=null && host.ActivePage.Path==excel && since.ElapsedMilliseconds>200)
+                        {
+                            Require(host.Pages.Count==3,"reopening an existing file must activate its page without duplicates");
+                            Capture(host,"real-files");phase=6;Console.WriteLine("All file opens applied; closing suite");host.Close();return;
                         }
                         if(phase==6 && host.IsDisposed)timer.Stop();
                     }
