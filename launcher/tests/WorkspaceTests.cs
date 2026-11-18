@@ -131,7 +131,7 @@ internal static class WorkspaceTests
     }
     private static void CheckHome(SuiteHost host,string folder)
     {
-        host.Size=new Size(1440,900);
+        host.MaximumSize=new Size(4096,4096);host.Size=new Size(1440,900);
         string[] names={"TOPS SANKHYA.xlsx","Relatório mensal.docx","Controle de estoque.xlsx","Proposta comercial.docx"};
         foreach(string name in names){string path=Path.Combine(folder,name);File.WriteAllText(path,"Home fixture");host.Home.AddRecent(path);}
         host.Home.UpdateProfile("Caio Rodrigues",null);host.Refresh();host.Home.Refresh();

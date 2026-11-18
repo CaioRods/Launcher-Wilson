@@ -102,7 +102,7 @@ internal sealed class WilsonHome : Control
     }
     protected override void OnPaint(PaintEventArgs e)
     {
-        base.OnPaint(e);scale=DeviceDpi/96f;var g=e.Graphics;g.SmoothingMode=SmoothingMode.AntiAlias;g.TextRenderingHint=TextRenderingHint.ClearTypeGridFit;g.ScaleTransform(scale,scale);
+        base.OnPaint(e);scale=DeviceDpi/96f;var g=e.Graphics;g.SmoothingMode=SmoothingMode.AntiAlias;g.InterpolationMode=InterpolationMode.HighQualityBicubic;g.TextRenderingHint=TextRenderingHint.ClearTypeGridFit;g.ScaleTransform(scale,scale);
         float w=ClientSize.Width/scale,h=ClientSize.Height/scale,side=w>=1100?244:208;
         targets.Clear();groups.Clear();g.Clear(BackColor);DrawSidebar(g,side,h);
         var saved=g.Save();g.SetClip(new RectangleF(side,0,Math.Max(0,w-side-12),h));g.TranslateTransform(0,-offset);mainDrawing=true;
@@ -216,13 +216,17 @@ internal sealed class WilsonHome : Control
     }
     private void AppCard(Graphics g,RectangleF r,int app)
     {
-        string id="app"+app;var group=r;group.Y-=offset;groups[id]=group;float lift=Animations?Hot(id):0;r.Y-=lift;Card(g,r,id);g.DrawImage(SuiteHost.Logos[app],r.X+22,r.Y+24,64,64);Line(g,r.X+102,r.Y+22,r.X+102,Color.Transparent);
-        using(var p=new Pen(Color.FromArgb(219,214,210)))g.DrawLine(p,r.X+104,r.Y+22,r.X+104,r.Y+78);
-        float left=r.X+122,w=r.Width-142;Color accent=app==0?Color.FromArgb(170,8,33):Color.FromArgb(168,111,8);
-        Text(g,Distribution.Names[app],new RectangleF(left,r.Y+12,w,40),27,Color.FromArgb(28,26,27),true);
-        Text(g,app==0?"Organize dados. Transforme ideias em resultados.":"Dê forma aos seus textos e relatórios.",new RectangleF(left,r.Y+49,w,28),14,Color.FromArgb(90,86,88));
-        float buttonWidth=Math.Min(186,w*.55f);ActionButton(g,id+"new",new RectangleF(left,r.Y+91,buttonWidth,36),app==0?"Nova planilha":"Novo documento",accent,()=>host.OpenDocument(app,null));
-        Link(g,id+"open",new RectangleF(left+buttonWidth+14,r.Y+91,Math.Max(80,w-buttonWidth-14),36),app==0?"Abrir planilha":"Abrir documento",accent,()=>host.OpenPicker(app));
+        string id="app"+app;var group=r;group.Y-=offset;groups[id]=group;float lift=Animations?Hot(id):0;r.Y-=lift;Card(g,r,id);
+        bool compact=r.Width<460;
+        g.DrawImage(SuiteHost.Logos[app],r.X+(compact?18:22),r.Y+20,compact?52:64,compact?52:64);
+        float left=r.X+(compact?84:122),w=r.Right-left-20;Color accent=app==0?Color.FromArgb(170,8,33):Color.FromArgb(168,111,8);
+        if(!compact)using(var p=new Pen(Color.FromArgb(219,214,210)))g.DrawLine(p,r.X+104,r.Y+22,r.X+104,r.Y+78);
+        Text(g,Distribution.Names[app],new RectangleF(left,r.Y+12,w,40),compact?24:27,Color.FromArgb(28,26,27),true);
+        string description=compact?(app==0?"Planilhas e dados organizados.":"Textos, relatórios e ideias."):(app==0?"Organize dados. Transforme ideias em resultados.":"Dê forma aos seus textos e relatórios.");
+        Text(g,description,new RectangleF(left,r.Y+49,w,28),13,Color.FromArgb(90,86,88));
+        float actionLeft=compact?r.X+18:left,actionWidth=compact?r.Width-36:w,buttonWidth=Math.Min(186,actionWidth*.57f);
+        ActionButton(g,id+"new",new RectangleF(actionLeft,r.Y+91,buttonWidth,36),app==0?"Nova planilha":"Novo documento",accent,()=>host.OpenDocument(app,null));
+        Link(g,id+"open",new RectangleF(actionLeft+buttonWidth+12,r.Y+91,actionWidth-buttonWidth-12,36),app==0?"Abrir planilha":"Abrir documento",accent,()=>host.OpenPicker(app));
         // The card itself gets a subtle edge/lift; only explicit actions create files.
         Hit(id,new RectangleF(r.X+8,r.Y+8,96,r.Height-16),Distribution.Names[app],()=>host.OpenDocument(app,null));
     }
@@ -254,7 +258,7 @@ internal sealed class WilsonHome : Control
         return height;
     }
     private static string Folder(string path){try{return new DirectoryInfo(Path.GetDirectoryName(path)).Name;}catch(ArgumentException){return "—";}}
-    private static string ReadModified(string path){try{var info=new FileInfo(path);if(!info.Exists)return "Indisponível";DateTime t=info.LastWriteTime;if(t.Date==DateTime.Today)return "Hoje, "+t.ToString("HH:mm");if(t.Date==DateTime.Today.AddDays(-1))return "Ontem";return t.ToString("dd/MM/yyyy");}catch(IOException){return "—";}catch(UnauthorizedAccessException){return "—";}}
+    private static string ReadModified(string path){try{var info=new FileInfo(path);if(!info.Exists)return "Indisponível";DateTime t=info.LastWriteTime;if(t.Date==DateTime.Today)return "Hoje, "+t.ToString("HH:mm");if(t.Date==DateTime.Today.AddDays(-1))return "Ontem";return t.ToString("dd/MM/yyyy");}catch(IOException){return "—";}catch(UnauthorizedAccessException){return "—";}catch(ArgumentException){return "—";}}
     private string Modified(string path)
     {
         lock(dates){string date;if(dates.TryGetValue(path,out date))return date;if(!pendingDates.Add(path))return "…";}
