@@ -114,7 +114,7 @@ internal static class WorkspaceTests
                         }
                         if(phase==6 && host.IsDisposed)timer.Stop();
                     }
-                    catch(Exception error){failure=error.ToString();timer.Stop();host.Dispose();}
+                    catch(Exception error){failure=error.ToString();timer.Stop();Capture(host,real?"real-failure":"failure");host.Dispose();}
                 };
                 timer.Start();Application.Run(host);
                 Require(failure==null,failure??"");Require(phase==6,"test ended before all checks");

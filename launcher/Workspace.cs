@@ -212,7 +212,10 @@ internal sealed class SuiteHost : Form
                 IntPtr window=p.Window!=IntPtr.Zero?p.Window:Native.FindWindow(p.Process.Id);
                 if(window!=IntPtr.Zero && Native.Responsive(window))
                 {
-                    if(Testing)Console.WriteLine("Attaching editor "+p.App+": "+p.Title);
+                    // Keep the candidate even if its first parent/style transition is replaced by
+                    // winit. A temporarily owned window may disappear from EnumWindows afterwards.
+                    p.Window=window;
+                    if(Testing)Console.WriteLine(DateTime.UtcNow.ToString("O")+" Attaching editor "+p.App+": "+p.Title+" hwnd="+window);
                     long style=Native.GetWindowLongPtr(window,-16).ToInt64();
                     Native.SetWindowLongPtr(window,-16,new IntPtr((style & ~0x80CF0000L) | 0x46000000L)); // child, clip siblings
                     if(Testing)Console.WriteLine("Applying parent for editor "+p.App);
