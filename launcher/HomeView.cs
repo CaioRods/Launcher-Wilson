@@ -125,8 +125,8 @@ internal sealed class WilsonHome : Control
         Fill(g,r,Color.White,14);using(var path=WorkspaceStrip.Round(r,14))using(var pen=new Pen(id!=null&&amount>0?Color.FromArgb(90,163,30,39):Color.FromArgb(225,219,217)))g.DrawPath(pen,path);
     }
     private static void Fill(Graphics g,RectangleF r,Color color,float round=0){if(r.Width<=0||r.Height<=0)return;using(var b=new SolidBrush(color)){if(round>0){using(var p=WorkspaceStrip.Round(r,round))g.FillPath(b,p);}else g.FillRectangle(b,r);}}
-    internal static void Text(Graphics g,string value,RectangleF rect,float size,Color color,bool bold=false,StringAlignment alignment=StringAlignment.Near)
-    {using(var f=new Font("Segoe UI",size,bold?FontStyle.Bold:FontStyle.Regular,GraphicsUnit.Pixel))using(var b=new SolidBrush(color))using(var format=new StringFormat{Alignment=alignment,LineAlignment=StringAlignment.Center,Trimming=StringTrimming.EllipsisCharacter,FormatFlags=StringFormatFlags.NoWrap})g.DrawString(value,f,b,rect,format);}
+    internal static void Text(Graphics g,string value,RectangleF rect,float size,Color color,bool bold=false,StringAlignment alignment=StringAlignment.Near,bool wrap=false)
+    {using(var f=new Font("Segoe UI",size,bold?FontStyle.Bold:FontStyle.Regular,GraphicsUnit.Pixel))using(var b=new SolidBrush(color))using(var format=new StringFormat{Alignment=alignment,LineAlignment=StringAlignment.Center,Trimming=StringTrimming.EllipsisCharacter,FormatFlags=wrap?0:StringFormatFlags.NoWrap})g.DrawString(value,f,b,rect,format);}
     private static void Line(Graphics g,float x,float y,float end,Color color){using(var p=new Pen(color))g.DrawLine(p,x,y,end,y);}
     private void ActionButton(Graphics g,string id,RectangleF r,string label,Color color,Action action,bool outline=false)
     {
@@ -276,7 +276,7 @@ internal sealed class WilsonHome : Control
     }
     private void ModelRow(Graphics g,RectangleF r,int app,string key,string title)
     {
-        string id="model"+key;if(Hot(id)>0)Fill(g,r,Color.FromArgb(249,239,232),8);Miniature(g,new RectangleF(r.X+2,r.Y+4,76,55),app);Text(g,title,new RectangleF(r.X+90,r.Y+8,r.Width-90,51),14,Color.FromArgb(54,43,44),true);Hit(id,r,"Criar "+title,()=>host.OpenTemplate(app,key));FocusRing(g,id,r);
+        string id="model"+key;if(Hot(id)>0)Fill(g,r,Color.FromArgb(249,239,232),8);Miniature(g,new RectangleF(r.X+2,r.Y+4,76,55),app);Text(g,title,new RectangleF(r.X+90,r.Y+8,r.Width-90,51),14,Color.FromArgb(54,43,44),true,StringAlignment.Near,true);Hit(id,r,"Criar "+title,()=>host.OpenTemplate(app,key));FocusRing(g,id,r);
     }
     private static void Miniature(Graphics g,RectangleF r,int app)
     {Fill(g,r,Color.White,6);using(var path=WorkspaceStrip.Round(r,6))using(var p=new Pen(Color.FromArgb(207,196,187)))g.DrawPath(p,path);Fill(g,new RectangleF(r.X+10,r.Y+9,r.Width-20,5),app==0?Color.FromArgb(174,29,43):Color.FromArgb(185,128,22),1);using(var p=new Pen(Color.FromArgb(215,210,204))){for(int i=0;i<4;i++)g.DrawLine(p,r.X+10,r.Y+22+i*7,r.Right-10,r.Y+22+i*7);if(app==0)for(int i=0;i<4;i++)g.DrawLine(p,r.X+10+i*(r.Width-20)/3,r.Y+18,r.X+10+i*(r.Width-20)/3,r.Bottom-9);}}
