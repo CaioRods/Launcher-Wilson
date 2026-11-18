@@ -31,11 +31,11 @@ jobs:
         include:
           - app: Excel
             repository: CaioRods/Excel-AW
-            revision: 36975418378549e20126c308bb5a5abe412c446f
+            revision: d95aa17ce9e10a5a9f6756fda54ea1e121059545
             package: gridcraft
           - app: Word
             repository: CaioRods/Word-AW
-            revision: 2aa4f4faf13878058304fad3a80dbe0263f2b3b1
+            revision: fcee0a849609fcc2fc6823e12a48ae2da13ac053
             package: wordcraft
     steps:
       - uses: actions/checkout@v4
@@ -132,10 +132,10 @@ jobs:
         include:
           - app: Excel
             repository: CaioRods/Excel-AW
-            revision: 36975418378549e20126c308bb5a5abe412c446f
+            revision: d95aa17ce9e10a5a9f6756fda54ea1e121059545
           - app: Word
             repository: CaioRods/Word-AW
-            revision: 2aa4f4faf13878058304fad3a80dbe0263f2b3b1
+            revision: fcee0a849609fcc2fc6823e12a48ae2da13ac053
     steps:
       - uses: actions/checkout@v4
         with:
@@ -157,8 +157,9 @@ jobs:
           if [ '${{ matrix.app }}' = 'Excel' ]; then
             cargo test --locked -p gridcraft-ui-egui --test it drag_cursor::ctrl_ -- --nocapture
             cargo test --locked -p gridcraft-ui-egui --lib aw_surface_tests -- --nocapture
+            cargo test --locked -p gridcraft-ui-egui --test it file_menu::aw_sidebar_ -- --nocapture
           else
-            cargo test --locked -p wordcraft-ui-egui --lib aw_sidebar_matches_excel -- --nocapture
+            cargo test --locked -p wordcraft-ui-egui --lib backstage::tests::aw_sidebar_ -- --nocapture
             cargo test --locked -p wordcraft-ui-egui --lib aw_surface_tests -- --nocapture
             cargo test --locked -p wordcraft-ui-egui --lib every_side_menu_item_has_a_drawn_icon -- --nocapture
           fi
