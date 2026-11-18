@@ -187,7 +187,7 @@ jobs:
           REVISION: ${{ matrix.revision }}
         run: |
           [[ "$REUSE_RUN" =~ ^[0-9]+$ ]] || exit 1
-          passed=$(gh api "repos/CaioRods/Launcher-Wilson/actions/runs/$REUSE_RUN/jobs?per_page=100" --jq ".jobs[] | select(.name == \"Regressões $APP\") | .conclusion")
+          passed=$(gh api "repos/CaioRods/Launcher-Wilson/actions/runs/$REUSE_RUN/jobs?per_page=100" | jq -r --arg name "Regressões $APP" '.jobs[] | select(.name == $name) | .conclusion')
           [ "$passed" = success ] || exit 1
           source=$(gh api "repos/CaioRods/Launcher-Wilson/actions/runs/$REUSE_RUN" --jq .head_sha)
           gh api "repos/CaioRods/Launcher-Wilson/contents/.github/workflows/windows.yml?ref=$source" --jq .content | base64 -d > previous.yml
