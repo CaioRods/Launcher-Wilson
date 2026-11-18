@@ -85,6 +85,8 @@ internal sealed class SuiteHost : Form
         poll.Start();
         movement.Tick+=(s,e)=>{if(ActivePage==null || ActivePage.Window==IntPtr.Zero || transition.ElapsedMilliseconds>=150){movement.Stop();ResizeEditors();return;}float t=(float)transition.ElapsedMilliseconds/150;int x=(int)(12*Math.Pow(1-t,3));Native.Resize(ActivePage.Window,x,0,Stage.ClientSize.Width,Stage.ClientSize.Height);};
         Shown += (s,e) => { MaximizedBounds=Screen.FromHandle(Handle).WorkingArea; };
+        Activated += (s,e) => { if(ActivePage!=null && ActivePage.Window!=IntPtr.Zero)Native.FocusEditor(ActivePage.Window); };
+        Deactivate += (s,e) => { if(ActivePage!=null && ActivePage.Window!=IntPtr.Zero)Native.EditorActive(ActivePage.Window,false); };
         FormClosing += ClosingWorkspace;
         FormClosed += (s,e) => { poll.Dispose(); movement.Dispose(); if(broker!=null) broker.Dispose(); foreach(var p in Pages) p.Process.Dispose(); };
     }
@@ -173,7 +175,7 @@ internal sealed class SuiteHost : Form
     {
         closeAll=false;
         ActivePage=page;
-        foreach(var p in Pages) if(p.Window!=IntPtr.Zero) Native.ShowWindowAsync(p.Window,p==page?5:0);
+        foreach(var p in Pages) if(p.Window!=IntPtr.Zero) {if(p!=page)Native.EditorActive(p.Window,false);Native.ShowWindowAsync(p.Window,p==page?5:0);}
         Home.Visible=page==null;
         if(page==null){Home.Navigate("home");Home.BringToFront();}
         else if(page.Window!=IntPtr.Zero){ Native.FocusEditor(page.Window);status.Text=page.Title; }
@@ -504,7 +506,10 @@ internal static class Native
     [DllImport("user32.dll",SetLastError=true)] private static extern IntPtr SendMessageTimeout(IntPtr h,uint message,IntPtr w,IntPtr l,uint flags,uint timeout,out IntPtr result);
     internal static bool Responsive(IntPtr window){IntPtr result;return SendMessageTimeout(window,0,IntPtr.Zero,IntPtr.Zero,2,50,out result)!=IntPtr.Zero;}
     internal static void Resize(IntPtr window,int x,int y,int width,int height){SetWindowPos(window,IntPtr.Zero,x,y,width,height,0x4014);}
-    internal static void FocusEditor(IntPtr window){if(Responsive(window))SetFocus(window);}
+    // Winit requires both focus and activation. An embedded child receives WM_SETFOCUS,
+    // but Windows activates its top-level host rather than the child's former title bar.
+    internal static void EditorActive(IntPtr window,bool active){PostMessage(window,0x0086,active?new IntPtr(1):IntPtr.Zero,IntPtr.Zero);}
+    internal static void FocusEditor(IntPtr window){if(Responsive(window)){EditorActive(window,true);SetFocus(window);}}
     internal static IntPtr FindWindow(int process)
     {
         IntPtr found=IntPtr.Zero;EnumWindows((h,p)=>{uint pid;GetWindowThreadProcessId(h,out pid);if(pid==process && GetWindow(h,4)==IntPtr.Zero){var text=new StringBuilder(512);GetWindowText(h,text,512);var kind=new StringBuilder(256);GetClassName(h,kind,kind.Capacity);string name=kind.ToString();if(text.Length>0 && (name=="Window Class" || name.StartsWith("WindowsForms10.Window.",StringComparison.Ordinal))){found=h;return false;}}return true;},IntPtr.Zero);return found;
