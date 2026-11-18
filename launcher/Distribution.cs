@@ -19,7 +19,7 @@ internal static class Distribution
 {
     internal static readonly string[] Names = { "Excel AW", "Word AW" };
     private static readonly string[] Slugs = { "Excel-AW", "Word-AW" };
-    private static readonly Version[] Bundled = { new Version(1, 41, 10), new Version(0, 18, 6) };
+    private static readonly Version[] Bundled = { new Version(1, 41, 11), new Version(0, 18, 7) };
 
     internal static Update BundledUpdate(int app) { return new Update { Version = Bundled[app] }; }
 

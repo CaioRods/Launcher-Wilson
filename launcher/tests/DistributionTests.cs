@@ -22,10 +22,10 @@ internal static class DistributionTests
         Check(Distribution.ButtonText(0, true, false) == "Abrir Excel AW");
         Check(Distribution.ButtonText(1, true, false) == "Abrir Word AW");
         Check(Distribution.ButtonText(1, true, true) == "Atualizar Word AW");
-        Check(Distribution.ChooseUpdate(0, new Version(1, 41, 8), true, null).Version == new Version(1, 41, 10));
-        Check(Distribution.ChooseUpdate(0, new Version(1, 41, 10), true, null) == null);
-        Check(Distribution.ChooseUpdate(0, new Version(1, 41, 10), false, null) == null);
-        Check(Distribution.ChooseUpdate(1, new Version(0, 18, 4), true, null).Version == new Version(0, 18, 6));
+        Check(Distribution.ChooseUpdate(0, new Version(1, 41, 8), true, null).Version == new Version(1, 41, 11));
+        Check(Distribution.ChooseUpdate(0, new Version(1, 41, 11), true, null) == null);
+        Check(Distribution.ChooseUpdate(0, new Version(1, 41, 11), false, null) == null);
+        Check(Distribution.ChooseUpdate(1, new Version(0, 18, 4), true, null).Version == new Version(0, 18, 7));
         var remote = new Update { Version = new Version(1, 42, 0), Url = new Uri("https://github.com/") };
         Check(Distribution.ChooseUpdate(0, new Version(1, 41, 8), true, remote) == remote);
         Check(Distribution.ChooseUpdate(0, new Version(2, 0, 0), true, remote) == null);

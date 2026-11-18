@@ -49,7 +49,7 @@ internal static class WorkspaceTests
                         if(phase==0)
                         {
                             if(!real)CheckHome(host,folder);
-                            Console.WriteLine("Opening editor processes");Capture(host,real?"real-home":"home");host.OpenDocument(0,null);host.OpenDocument(1,word);all.AddRange(host.Pages.Select(p=>p.Process));first=host.Pages[0];second=host.Pages[1];phase=1;Console.WriteLine("Waiting for native editor windows");return;
+                            Console.WriteLine("Opening editor processes");Capture(host,real?"real-home":"home");host.OpenDocument(0,null);host.OpenDocument(1,real?null:word);all.AddRange(host.Pages.Select(p=>p.Process));first=host.Pages[0];second=host.Pages[1];phase=1;Console.WriteLine("Waiting for native editor windows");return;
                         }
                         if(phase==1 && host.Pages.Count==2 && host.Pages.All(p=>p.Window!=IntPtr.Zero && Native.IsWindow(p.Window) && Native.GetParent(p.Window)==host.Stage.Handle && p.Attached.ElapsedMilliseconds>1000))
                         {
@@ -61,8 +61,20 @@ internal static class WorkspaceTests
                         if(phase==2 && since.ElapsedMilliseconds>500)
                         {
                             Native.RECT bounds;Native.GetClientRect(second.Window,out bounds);Require(bounds.Right==host.Stage.ClientSize.Width && bounds.Bottom==host.Stage.ClientSize.Height,"embedded editor must follow workspace resizing");
-                            Capture(host,real?"real-mixed-tabs":"mixed-tabs");host.ClosePage(second);phase=3;since.Restart();return;
+                            Capture(host,real?"real-mixed-tabs":"mixed-tabs");
+                            if(real){Native.SetForegroundWindow(host.Handle);Native.FocusEditor(second.Window);KeyboardTest.TypeOnPage(second.Window,"AWCONTROLETESTE");phase=20;since.Restart();return;}
+                            host.ClosePage(second);phase=3;since.Restart();return;
                         }
+                        if(phase==20 && since.ElapsedMilliseconds>600){KeyboardTest.Shortcut(0x41);KeyboardTest.Shortcut(0x43);phase=21;since.Restart();return;}
+                        if(phase==21 && since.ElapsedMilliseconds>500)
+                        {
+                            string copied="";try{copied=Clipboard.GetText();}catch(System.Runtime.InteropServices.ExternalException){}
+                            if(!copied.Contains("AWCONTROLETESTE")&&since.ElapsedMilliseconds<5000)return;
+                            Require(copied.Contains("AWCONTROLETESTE"),"a new hosted Word page must accept actual keyboard input and copy its typed text");
+                            Capture(host,"real-word-typing");Console.WriteLine("Blank hosted Word typing and clipboard passed");host.ClosePage(second);phase=22;since.Restart();return;
+                        }
+                        if(phase==22 && since.ElapsedMilliseconds>800){Capture(host,"real-word-save-question");KeyboardTest.Key(0x27);phase=23;since.Restart();return;}
+                        if(phase==23 && since.ElapsedMilliseconds>350){KeyboardTest.Key(0x0D);phase=4;Console.WriteLine("Discarding typed Word test document");return;}
                         if(phase==3 && since.ElapsedMilliseconds>600)
                         {
                             if(!real){Require(!second.Process.HasExited,"Cancel must keep the editor and its document alive");File.Delete(word+".keep");host.ClosePage(second);}
@@ -153,4 +165,25 @@ internal static class WorkspaceTests
         string folder=Environment.GetEnvironmentVariable("AWCONTROL_TEST_SCREENSHOTS");if(string.IsNullOrEmpty(folder))return;Directory.CreateDirectory(folder);
         using(var image=new Bitmap(form.ClientSize.Width,form.ClientSize.Height)){using(var g=Graphics.FromImage(image))g.CopyFromScreen(form.PointToScreen(Point.Empty),Point.Empty,image.Size);image.Save(Path.Combine(folder,name+".png"));}
     }
+}
+
+// Keyboard injection is confined to disposable CI documents and verifies the user-visible editing path.
+internal static class KeyboardTest
+{
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)] private struct Input {internal uint Type;internal Data Value;}
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit)] private struct Data {[System.Runtime.InteropServices.FieldOffset(0)] internal KeysInput Key;[System.Runtime.InteropServices.FieldOffset(0)] internal MouseInput Mouse;}
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)] private struct KeysInput {internal ushort Virtual,Scan;internal uint Flags,Time;internal IntPtr Extra;}
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)] private struct MouseInput {internal int X,Y;internal uint Data,Flags,Time;internal IntPtr Extra;}
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern uint SendInput(uint count,Input[] input,int size);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool SetCursorPos(int x,int y);
+    internal static void TypeOnPage(IntPtr window,string text)
+    {
+        Clipboard.Clear();var p=new Native.POINT{X=220,Y=310};Native.ClientToScreen(window,ref p);SetCursorPos(p.X,p.Y);
+        Send(new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=2}}},new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=4}}});
+        var list=new System.Collections.Generic.List<Input>();foreach(char c in text){list.Add(new Input{Type=1,Value=new Data{Key=new KeysInput{Scan=c,Flags=4}}});list.Add(new Input{Type=1,Value=new Data{Key=new KeysInput{Scan=c,Flags=6}}});}Send(list.ToArray());
+    }
+    internal static void Key(ushort code){Send(Press(code,false),Press(code,true));}
+    internal static void Shortcut(ushort code){Send(Press(0x11,false),Press(code,false),Press(code,true),Press(0x11,true));}
+    private static Input Press(ushort code,bool up){return new Input{Type=1,Value=new Data{Key=new KeysInput{Virtual=code,Flags=up?2u:0u}}};}
+    private static void Send(params Input[] input){if(SendInput((uint)input.Length,input,System.Runtime.InteropServices.Marshal.SizeOf(typeof(Input)))!=input.Length)throw new Exception("Windows did not accept the test keyboard input");}
 }

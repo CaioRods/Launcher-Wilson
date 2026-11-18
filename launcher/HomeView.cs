@@ -157,7 +157,7 @@ internal sealed class WilsonHome : Control
     {
         using(var brush=new LinearGradientBrush(new RectangleF(0,0,w,h),Color.FromArgb(164,0,25),Color.FromArgb(90,5,19),90))g.FillRectangle(brush,0,0,w,h);
         using(var shape=new GraphicsPath()){shape.AddPolygon(new[]{new PointF(0,h*.25f),new PointF(w,h*.12f),new PointF(w,h*.5f),new PointF(0,h*.83f)});using(var b=new SolidBrush(Color.FromArgb(17,255,96,94)))g.FillPath(b,shape);}
-        using(var wave=new GraphicsPath()){wave.AddBezier(0,h-9,w*.35f,h-38,w*.6f,h-12,w,h-35);wave.AddLine(w,h-35,w,h);wave.AddLine(w,h,0,h);wave.CloseFigure();using(var b=new LinearGradientBrush(new RectangleF(0,h-38,w,38),Color.FromArgb(255,201,48),Color.FromArgb(225,137,11),0))g.FillPath(b,wave);}
+        using(var wave=new GraphicsPath()){wave.AddBezier(0,h-9,w*.35f,h-38,w*.6f,h-12,w,h-35);wave.AddLine(w,h-35,w,h);wave.AddLine(w,h,0,h);wave.CloseFigure();using(var b=new LinearGradientBrush(new RectangleF(0,h-38,w,38),Color.FromArgb(255,201,48),Color.FromArgb(225,137,11),0f))g.FillPath(b,wave);}
         float logo=w>220?76:60;g.DrawImage(SuiteHost.Brand,14,24,logo,48);Text(g,"Wilson Control",new RectangleF(22+logo,26,w-logo-32,42),w>220?17:14,Color.White,true);
         string[] ids={"home","recent","favorites","models"},labels={"Início","Recentes","Favoritos","Modelos"},icons={"home","recent","star","file"};
         float navStart=h<640?96:110,step=h<560?37:h<640?42:50;
@@ -198,7 +198,7 @@ internal sealed class WilsonHome : Control
         float top=SearchBox(g,x,width);
         if(page=="models"){DrawModelGallery(g,x,top,width);return;}
         if(page!="home"){float height=DrawRecent(g,x,top,width,false);contentHeight=top+height+30;return;}
-        var hero=new RectangleF(x,top,width,118);using(var path=WorkspaceStrip.Round(hero,14))using(var brush=new LinearGradientBrush(hero,Color.FromArgb(255,245,225),Color.FromArgb(255,225,162),0))g.FillPath(brush,path);
+        var hero=new RectangleF(x,top,width,118);using(var path=WorkspaceStrip.Round(hero,14))using(var brush=new LinearGradientBrush(hero,Color.FromArgb(255,245,225),Color.FromArgb(255,225,162),0f))g.FillPath(brush,path);
         var state=g.Save();using(var clip=WorkspaceStrip.Round(hero,14))g.SetClip(clip);
         if(width>=760)DrawHeroArt(g,new RectangleF(hero.Right-245,top+2,245,116));g.Restore(state);
         Fill(g,new RectangleF(x+28,top+25,4,68),Color.FromArgb(241,178,25),2);Text(g,"O que vamos criar hoje?",new RectangleF(x+48,top+17,width-(width>=760?270:85),43),width<700?26:30,Color.FromArgb(112,12,27),true);Text(g,"Planilhas e documentos conectados ao seu dia.",new RectangleF(x+48,top+62,width-(width>=760?260:80),29),width<700?14:17,Color.FromArgb(83,77,75),true);
