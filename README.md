@@ -1,12 +1,17 @@
-# Central de Apps Alimentos Wilson
+# Wilson Control · AWcontrol
 
-Aplicativo Windows para instalar e atualizar o Excel AW e o Word AW. Desenvolvido por Caio Victor Rodrigues para uso interno na Alimentos Wilson, com o logotipo do [site oficial da empresa](https://www.alimentoswilson.com.br/).
+Aplicativo Windows para trabalhar com planilhas do Excel AW e documentos do Word AW em abas na mesma janela, além de instalar e atualizar os dois editores. Créditos: @CaioRods. A identidade visual utiliza o logotipo da [Alimentos Wilson](https://www.alimentoswilson.com.br/); as origens dos recursos estão em [ATTRIBUTION.md](launcher/assets/ATTRIBUTION.md).
+
+A Home reúne novos arquivos, busca, recentes, favoritos e modelos. As abas podem ser reorganizadas por arraste e fechadas individualmente, com confirmação de alterações. O perfil é compartilhado entre os editores. Com a central aberta, arquivos abertos pelo Explorer entram nela; com a central fechada, os editores continuam funcionando individualmente.
 
 ## Instalação
 
 1. Baixe o ZIP em [Releases](https://github.com/CaioRods/Launcher-Wilson/releases) e extraia todo o conteúdo.
 2. Abra **Alimentos Wilson.exe**.
-3. Escolha **Instalar Excel AW**, **Instalar Word AW** ou **Instalar os dois**. Após a instalação, os botões passam a **Abrir**. Uma atualização encontrada tem prioridade e oferece **Atualizar**. Instalações existentes são reconhecidas também ao reabrir a central.
+3. Acesse **Aplicativos** ou **Gerenciar aplicativos** para instalar as versões incluídas. Após a instalação, os botões passam a **Abrir**. Uma atualização encontrada oferece **Atualizar**. Instalações existentes são reconhecidas também ao reabrir a central.
+4. Na Home, escolha **Nova planilha**, **Novo documento** ou abra um arquivo existente.
+
+Para atualizar um pacote de testes, feche a central e os editores, extraia o novo pacote completo e atualize ambos em **Gerenciar aplicativos**. Uma alteração no código do GitHub só chega aos outros PCs depois que uma nova versão é distribuída e instalada.
 
 Compatível com Windows 10 e 11 x64. A opção **Instalar para todos os usuários** solicita permissão de administrador. Com ela desligada, a instalação ocorre no perfil atual. Os dois MSIs ficam na pasta `instaladores` e a instalação inicial pode ser feita offline.
 

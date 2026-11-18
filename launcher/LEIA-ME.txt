@@ -2,7 +2,12 @@ AWCONTROL · ALIMENTOS WILSON
 
 1. Extraia os ZIPs até encontrar Alimentos Wilson.exe e a pasta instaladores.
 2. Abra Alimentos Wilson.exe: a Home permite criar planilhas e documentos.
-3. Use Instalar / atualizar apps para instalar as versões incluídas no pacote.
+3. Use Aplicativos ou Gerenciar aplicativos para instalar/atualizar os dois apps.
+4. Crie uma planilha ou documento, abra arquivos, busque recentes ou escolha modelos.
+
+Ao substituir um pacote de testes, feche a central e os editores antes de extrair
+o novo pacote completo. Atualize ambos os aplicativos em Gerenciar aplicativos.
+Mudar o código no GitHub não atualiza automaticamente as instalações nos PCs.
 
 As páginas de Excel AW e Word AW ficam em abas na mesma janela. Arraste as
 abas para reorganizar e use x para fechar. Os editores perguntam sobre
