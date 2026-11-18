@@ -489,6 +489,7 @@ internal static class Native
     [DllImport("user32.dll")] internal static extern bool EnumWindows(EnumWindow fn,IntPtr p);
     [DllImport("user32.dll")] internal static extern uint GetWindowThreadProcessId(IntPtr h,out uint pid);
     [DllImport("user32.dll")] internal static extern IntPtr GetWindow(IntPtr h,uint command);
+    [DllImport("user32.dll",CharSet=CharSet.Unicode)] private static extern int GetClassName(IntPtr h,StringBuilder b,int size);
     [DllImport("user32.dll",CharSet=CharSet.Unicode)] internal static extern int GetWindowText(IntPtr h,StringBuilder b,int size);
     [DllImport("user32.dll",EntryPoint="GetWindowLongPtrW")] internal static extern IntPtr GetWindowLongPtr(IntPtr h,int index);
     [DllImport("user32.dll",EntryPoint="SetWindowLongPtrW")] internal static extern IntPtr SetWindowLongPtr(IntPtr h,int index,IntPtr value);
@@ -511,6 +512,6 @@ internal static class Native
     }
     internal static IntPtr FindWindow(int process)
     {
-        IntPtr found=IntPtr.Zero;EnumWindows((h,p)=>{uint pid;GetWindowThreadProcessId(h,out pid);if(pid==process && GetWindow(h,4)==IntPtr.Zero){var text=new StringBuilder(512);GetWindowText(h,text,512);if(text.Length>0 && !text.ToString().Contains("IME")){found=h;return false;}}return true;},IntPtr.Zero);return found;
+        IntPtr found=IntPtr.Zero;EnumWindows((h,p)=>{uint pid;GetWindowThreadProcessId(h,out pid);if(pid==process && GetWindow(h,4)==IntPtr.Zero){var text=new StringBuilder(512);GetWindowText(h,text,512);var kind=new StringBuilder(256);GetClassName(h,kind,kind.Capacity);string name=kind.ToString();if(text.Length>0 && (name=="Window Class" || name.StartsWith("WindowsForms10.Window.",StringComparison.Ordinal))){found=h;return false;}}return true;},IntPtr.Zero);return found;
     }
 }
