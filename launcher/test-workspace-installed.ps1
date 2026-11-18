@@ -1,6 +1,7 @@
 param([Parameter(Mandatory)] [string] $Packages)
 $ErrorActionPreference = 'Stop'
 $installed = @()
+$passed = $false
 try {
   foreach ($app in @('Excel','Word')) {
     $msi = (Resolve-Path (Join-Path $Packages "$app-AW-x64.msi")).Path
@@ -11,8 +12,11 @@ try {
   }
   Write-Output "Iniciando teste com editores reais"
   & "$PSScriptRoot\test-workspace.ps1" -Real
+  $passed = $true
 } finally {
-  foreach ($msi in $installed) {
+  # Failed tests may leave a hung native window. Do not block diagnostic uploads
+  # on Restart Manager in a disposable Actions VM; the VM is destroyed afterwards.
+  foreach ($msi in $(if ($passed) { $installed } else { @() })) {
     $p = Start-Process msiexec.exe -ArgumentList "/x `"$msi`" /qn /norestart" -Wait -PassThru
     if ($p.ExitCode -notin @(0,3010)) { Write-Warning "Falha ao remover instalador de teste: $($p.ExitCode)" }
   }

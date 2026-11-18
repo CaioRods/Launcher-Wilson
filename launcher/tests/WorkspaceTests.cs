@@ -65,7 +65,7 @@ internal static class WorkspaceTests
                             if(real){Native.SetForegroundWindow(host.Handle);Native.FocusEditor(second.Window);KeyboardTest.ClickOnPage(second.Window);phase=19;since.Restart();return;}
                             host.ClosePage(second);phase=3;since.Restart();return;
                         }
-                        if(phase==19 && since.ElapsedMilliseconds>500){KeyboardTest.Type("AWCONTROLETESTE");phase=20;since.Restart();return;}
+                        if(phase==19 && since.ElapsedMilliseconds>500){KeyboardTest.DescribeFocus(second.Window);KeyboardTest.Type("AWCONTROLETESTE");phase=20;since.Restart();return;}
                         if(phase==20 && since.ElapsedMilliseconds>600){Capture(host,"real-word-after-typing");KeyboardTest.Shortcut(0x41);KeyboardTest.Shortcut(0x43);phase=21;since.Restart();return;}
                         if(phase==21 && since.ElapsedMilliseconds>500)
                         {
@@ -184,6 +184,10 @@ internal static class WorkspaceTests
 // Keyboard injection is confined to disposable CI documents and verifies the user-visible editing path.
 internal static class KeyboardTest
 {
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)] private struct GuiInfo {internal uint Size,Flags;internal IntPtr Active,Focus,Capture,MenuOwner,MoveSize,Caret;internal Native.RECT CaretRect;}
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool GetGUIThreadInfo(uint thread,ref GuiInfo info);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+    internal static void DescribeFocus(IntPtr window){uint pid;uint thread=Native.GetWindowThreadProcessId(window,out pid);var info=new GuiInfo{Size=(uint)System.Runtime.InteropServices.Marshal.SizeOf(typeof(GuiInfo))};GetGUIThreadInfo(thread,ref info);Console.WriteLine("Keyboard target="+window+" focus="+info.Focus+" active="+info.Active+" foreground="+GetForegroundWindow());}
     [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)] private struct Input {internal uint Type;internal Data Value;}
     [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit)] private struct Data {[System.Runtime.InteropServices.FieldOffset(0)] internal KeysInput Key;[System.Runtime.InteropServices.FieldOffset(0)] internal MouseInput Mouse;}
     [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)] private struct KeysInput {internal ushort Virtual,Scan;internal uint Flags,Time;internal IntPtr Extra;}
