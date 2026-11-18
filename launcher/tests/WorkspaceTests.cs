@@ -50,9 +50,9 @@ internal static class WorkspaceTests
                         {
                             Console.WriteLine("Opening editor processes");Capture(host,real?"real-home":"home");host.OpenDocument(0,null);host.OpenDocument(1,word);all.AddRange(host.Pages.Select(p=>p.Process));first=host.Pages[0];second=host.Pages[1];phase=1;Console.WriteLine("Waiting for native editor windows");return;
                         }
-                        if(phase==1 && host.Pages.Count==2 && host.Pages.All(p=>p.Window!=IntPtr.Zero))
+                        if(phase==1 && host.Pages.Count==2 && host.Pages.All(p=>p.Window!=IntPtr.Zero && Native.IsWindow(p.Window) && Native.GetParent(p.Window)==host.Stage.Handle && p.Attached.ElapsedMilliseconds>1000))
                         {
-                            Require(host.Pages.All(p=>Native.GetParent(p.Window)==host.Stage.Handle),"editor must be a real child of the workspace");
+                            Require(host.Pages.All(p=>Native.GetParent(p.Window)==host.Stage.Handle),"editor must remain a real child of the workspace after its first rendered frame");
                             host.SelectPage(first);Eventually(()=>Native.IsWindowVisible(first.Window)&&!Native.IsWindowVisible(second.Window),"tab switching must show only the selected editor");
                             host.SelectPage(null);Eventually(()=>!Native.IsWindowVisible(first.Window)&&!Native.IsWindowVisible(second.Window),"Home must hide both editors");
                             host.SelectPage(second);host.Size=new Size(1040,680);host.Reorder(second,0);Require(host.Pages[0]==second,"drag order must retain page identity");phase=2;Console.WriteLine("Both editors attached and switched");since.Restart();return;
@@ -73,7 +73,7 @@ internal static class WorkspaceTests
                             var send=Task.Run(()=>WorkspaceBroker.Forward(new[]{excel,word}));
                             send.ContinueWith(t=>{if(!t.Result)failure="broker did not acknowledge forwarded files";});phase=5;Console.WriteLine("Forwarding two files");return;
                         }
-                        if(phase==5 && host.Pages.Count==3 && host.Pages.All(p=>p.Window!=IntPtr.Zero))
+                        if(phase==5 && host.Pages.Count==3 && host.Pages.All(p=>p.Window!=IntPtr.Zero && Native.IsWindow(p.Window) && Native.GetParent(p.Window)==host.Stage.Handle && p.Attached.ElapsedMilliseconds>1000))
                         {
                             all.AddRange(host.Pages.Select(p=>p.Process).Where(p=>!all.Contains(p)));
                             Require(host.Pages.Count(p=>p.App==0)==2 && host.Pages.Count(p=>p.App==1)==1,"forwarded files must create mixed Excel/Word pages");

@@ -26,6 +26,7 @@ internal sealed class EditorPage
     internal Process Process;
     internal IntPtr Window;
     internal readonly Stopwatch Opening = Stopwatch.StartNew();
+    internal readonly Stopwatch Attached = new Stopwatch();
     internal bool CloseSent;
 }
 
@@ -197,9 +198,12 @@ internal sealed class SuiteHost : Form
                 if(active) { var next=Pages.LastOrDefault();bool closing=closeAll;SelectPage(next);closeAll=closing; }
                 strip.Animate();continue;
             }
-            if(p.Window==IntPtr.Zero)
+            if(p.Window!=IntPtr.Zero && !Native.IsWindow(p.Window)){p.Window=IntPtr.Zero;p.Attached.Reset();}
+            // The renderer can recreate its first window or restore its original styles on first focus.
+            // Re-establish child style/parent after that transition instead of retaining a stale HWND.
+            if(p.Window==IntPtr.Zero || Native.GetParent(p.Window)!=Stage.Handle || (Native.GetWindowLongPtr(p.Window,-16).ToInt64() & 0x40000000L)==0)
             {
-                IntPtr window=Native.FindWindow(p.Process.Id);
+                IntPtr window=p.Window!=IntPtr.Zero?p.Window:Native.FindWindow(p.Process.Id);
                 if(window!=IntPtr.Zero && Native.Responsive(window))
                 {
                     if(Testing)Console.WriteLine("Attaching editor "+p.App+": "+p.Title);
@@ -210,7 +214,7 @@ internal sealed class SuiteHost : Form
                     if(Native.GetParent(window)!=Stage.Handle) { status.Text="Não foi possível integrar a página. Feche o app e tente novamente.";continue; }
                     long ex=Native.GetWindowLongPtr(window,-20).ToInt64();Native.SetWindowLongPtr(window,-20,new IntPtr(ex & ~0x00040000L));
                     if(Testing)Console.WriteLine("Parent attached for editor "+p.App);
-                    p.Window=window;Native.SetWindowPos(window,IntPtr.Zero,0,0,Stage.ClientSize.Width,Stage.ClientSize.Height,0x4034);
+                    p.Window=window;p.Attached.Restart();Native.SetWindowPos(window,IntPtr.Zero,0,0,Stage.ClientSize.Width,Stage.ClientSize.Height,0x4034);
                     Native.ShowWindowAsync(window,p==ActivePage?5:0);ResizeEditors();
                     if(p==ActivePage)Native.FocusEditor(window);
                     if(p.CloseSent)Native.PostMessage(window,0x0010,IntPtr.Zero,IntPtr.Zero);
@@ -511,6 +515,7 @@ internal static class Native
 {
     [StructLayout(LayoutKind.Sequential)] internal struct RECT { internal int Left,Top,Right,Bottom; }
     [DllImport("user32.dll")] internal static extern bool GetClientRect(IntPtr h,out RECT rect);
+    [DllImport("user32.dll")] internal static extern bool IsWindow(IntPtr h);
     [DllImport("user32.dll")] internal static extern bool IsWindowVisible(IntPtr h);
     internal delegate bool EnumWindow(IntPtr h,IntPtr p);
     [DllImport("user32.dll")] internal static extern bool EnumWindows(EnumWindow fn,IntPtr p);
