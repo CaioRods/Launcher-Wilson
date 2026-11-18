@@ -520,6 +520,9 @@ internal sealed class WorkspaceBroker : IDisposable
 internal static class Native
 {
     [StructLayout(LayoutKind.Sequential)] internal struct RECT { internal int Left,Top,Right,Bottom; }
+    [StructLayout(LayoutKind.Sequential)] internal struct POINT { internal int X,Y; }
+    [DllImport("user32.dll")] internal static extern bool GetWindowRect(IntPtr h,out RECT rect);
+    [DllImport("user32.dll")] internal static extern bool ClientToScreen(IntPtr h,ref POINT point);
     [DllImport("user32.dll")] internal static extern bool GetClientRect(IntPtr h,out RECT rect);
     [DllImport("user32.dll")] internal static extern bool IsWindow(IntPtr h);
     [DllImport("user32.dll")] internal static extern bool IsWindowVisible(IntPtr h);

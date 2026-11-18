@@ -122,7 +122,7 @@ internal static class WorkspaceTests
         {
             var clock=Stopwatch.StartNew();IntPtr window=IntPtr.Zero;
             while(clock.ElapsedMilliseconds<30000 && !p.HasExited){window=Native.FindWindow(p.Id);if(window!=IntPtr.Zero && Native.IsWindowVisible(window))break;System.Threading.Thread.Sleep(100);}
-            try{Require(window!=IntPtr.Zero && !p.HasExited,"standalone editor must still open without AWcontrol");Require(Native.GetParent(window)==IntPtr.Zero,"standalone editor must own its native window");Require((Native.GetWindowLongPtr(window,-16).ToInt64() & 0x00C00000L)==0,"Word and Excel must both use the integrated header");Native.PostMessage(window,0x0010,IntPtr.Zero,IntPtr.Zero);Require(p.WaitForExit(10000),"clean standalone document must close normally");}
+            try{Require(window!=IntPtr.Zero && !p.HasExited,"standalone editor must still open without AWcontrol");Require(Native.GetParent(window)==IntPtr.Zero,"standalone editor must own its native window");Native.RECT outer;Native.GetWindowRect(window,out outer);var client=new Native.POINT();Native.ClientToScreen(window,ref client);Require(client.Y-outer.Top<12,"Word and Excel must omit the native title strip; client offset="+(client.Y-outer.Top));Native.PostMessage(window,0x0010,IntPtr.Zero,IntPtr.Zero);Require(p.WaitForExit(10000),"clean standalone document must close normally");}
             finally{if(!p.HasExited)p.Kill();}
         }
     }
