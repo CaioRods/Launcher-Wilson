@@ -31,11 +31,11 @@ jobs:
         include:
           - app: Excel
             repository: CaioRods/Excel-AW
-            revision: d95aa17ce9e10a5a9f6756fda54ea1e121059545
+            revision: 751dddc3703e23d6983f6b4dec2facd937ec0ebf
             package: gridcraft
           - app: Word
             repository: CaioRods/Word-AW
-            revision: fcee0a849609fcc2fc6823e12a48ae2da13ac053
+            revision: d51bbf6630640ecaaa820bde02e054dd8fc488da
             package: wordcraft
     steps:
       - uses: actions/checkout@v4
@@ -106,6 +106,7 @@ jobs:
 
   central:
     name: Compilar a central
+    timeout-minutes: 10
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
@@ -141,10 +142,10 @@ jobs:
         include:
           - app: Excel
             repository: CaioRods/Excel-AW
-            revision: d95aa17ce9e10a5a9f6756fda54ea1e121059545
+            revision: 751dddc3703e23d6983f6b4dec2facd937ec0ebf
           - app: Word
             repository: CaioRods/Word-AW
-            revision: fcee0a849609fcc2fc6823e12a48ae2da13ac053
+            revision: d51bbf6630640ecaaa820bde02e054dd8fc488da
     steps:
       - uses: actions/checkout@v4
         with:
