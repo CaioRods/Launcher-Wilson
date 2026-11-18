@@ -27,7 +27,7 @@ internal sealed class EditorPage
     internal IntPtr Window;
     internal readonly Stopwatch Opening = Stopwatch.StartNew();
     internal readonly Stopwatch Attached = new Stopwatch();
-    internal bool CloseSent, AttachFailed;
+    internal bool CloseSent, AttachFailed, Attaching;
 }
 
 internal sealed class SuiteHost : Form
@@ -191,7 +191,7 @@ internal sealed class SuiteHost : Form
     { if(index<0 || index>=Pages.Count)return;Pages.Remove(page);Pages.Insert(index,page);strip.Animate(); }
     private void ResizeEditors()
     {
-        foreach(var p in Pages)if(p.Window!=IntPtr.Zero && !p.Process.HasExited)
+        foreach(var p in Pages)if(p.Window!=IntPtr.Zero && !p.Attaching && !p.Process.HasExited)
             Native.Resize(p.Window,0,0,Stage.ClientSize.Width,Stage.ClientSize.Height);
     }
     private void TickEditors()
@@ -204,6 +204,7 @@ internal sealed class SuiteHost : Form
                 if(active) { var next=Pages.LastOrDefault();bool closing=closeAll;SelectPage(next);closeAll=closing; }
                 strip.Animate();continue;
             }
+            if(p.Attaching)continue;
             if(p.Window!=IntPtr.Zero && !Native.IsWindow(p.Window)){p.Window=IntPtr.Zero;p.Attached.Reset();}
             // The renderer can recreate its first window or restore its original styles on first focus.
             // Re-establish child style/parent after that transition instead of retaining a stale HWND.
@@ -212,28 +213,7 @@ internal sealed class SuiteHost : Form
                 IntPtr window=p.Window!=IntPtr.Zero?p.Window:Native.FindWindow(p.Process.Id);
                 if(window!=IntPtr.Zero && Native.Responsive(window))
                 {
-                    // Keep the candidate even if its first parent/style transition is replaced by
-                    // winit. A temporarily owned window may disappear from EnumWindows afterwards.
-                    p.Window=window;
-                    if(Testing)Console.WriteLine(DateTime.UtcNow.ToString("O")+" Attaching editor "+p.App+": "+p.Title+" hwnd="+window);
-                    long style=Native.GetWindowLongPtr(window,-16).ToInt64();
-                    Native.SetWindowLongPtr(window,-16,new IntPtr((style & ~0x80CF0000L) | 0x46000000L)); // child, clip siblings
-                    if(Testing)Console.WriteLine("Applying parent for editor "+p.App);
-                    Native.SetParent(window,Stage.Handle);
-                    int parentError=Marshal.GetLastWin32Error();
-                    // Winit may refresh its styles while processing the parent's DPI/size messages.
-                    // Preserve WS_CHILD after that refresh so GetParent and clipping stay correct.
-                    long childStyle=Native.GetWindowLongPtr(window,-16).ToInt64();
-                    Native.SetWindowLongPtr(window,-16,new IntPtr((childStyle & ~0x80CF0000L) | 0x46000000L));
-                    if(Native.GetParent(window)!=Stage.Handle) { if(Testing && !p.AttachFailed)Console.WriteLine("Parent failure app="+p.App+" error="+parentError+" actual="+Native.GetParent(window)+" expected="+Stage.Handle+" style="+Native.GetWindowLongPtr(window,-16));p.AttachFailed=true;status.Text="Não foi possível integrar a página. Feche o app e tente novamente.";continue; }
-                    p.AttachFailed=false;
-                    long ex=Native.GetWindowLongPtr(window,-20).ToInt64();Native.SetWindowLongPtr(window,-20,new IntPtr(ex & ~0x00040000L));
-                    if(Testing)Console.WriteLine("Parent attached for editor "+p.App);
-                    p.Window=window;p.Attached.Restart();Native.SetWindowPos(window,IntPtr.Zero,0,0,Stage.ClientSize.Width,Stage.ClientSize.Height,0x4034);
-                    Native.ShowWindowAsync(window,p==ActivePage?5:0);ResizeEditors();
-                    if(p==ActivePage)Native.FocusEditor(window);
-                    if(p.CloseSent)Native.PostMessage(window,0x0010,IntPtr.Zero,IntPtr.Zero);
-                    status.Text=p.Title;
+                    AttachEditor(p,window);
                 }
                 else if(p.Opening.Elapsed.TotalSeconds>90)status.Text="O editor está demorando para iniciar. Aguarde ou feche esta página.";
             }
@@ -249,6 +229,35 @@ internal sealed class SuiteHost : Form
             if(Pages.Count==0){ completeClose=true;Close(); }
             else if(!Pages.Any(p=>p.CloseSent)){var next=Pages[0];ClosePage(next);closeAll=true;}
         }
+    }
+    private void AttachEditor(EditorPage page,IntPtr window)
+    {
+        // Keep the candidate across winit's startup transitions. Cross-process parent/style
+        // calls can wait for the editor's UI thread; let our own message loop keep running.
+        page.Window=window;page.Attaching=true;IntPtr stage=Stage.Handle;
+        Task.Run(()=>
+        {
+            if(Testing)Console.WriteLine(DateTime.UtcNow.ToString("O")+" Attaching editor "+page.App+" hwnd="+window);
+            long style=Native.GetWindowLongPtr(window,-16).ToInt64();
+            Native.SetWindowLongPtr(window,-16,new IntPtr((style & ~0x80CF0000L) | 0x46000000L));
+            Native.SetParent(window,stage);int error=Marshal.GetLastWin32Error();
+            long childStyle=Native.GetWindowLongPtr(window,-16).ToInt64();
+            Native.SetWindowLongPtr(window,-16,new IntPtr((childStyle & ~0x80CF0000L) | 0x46000000L));
+            long ex=Native.GetWindowLongPtr(window,-20).ToInt64();Native.SetWindowLongPtr(window,-20,new IntPtr(ex & ~0x00040000L));
+            if(IsDisposed || !IsHandleCreated)return;
+            try{BeginInvoke((Action)(()=>
+            {
+                page.Attaching=false;if(IsDisposed || !Pages.Contains(page))return;
+                if(Native.GetParent(window)!=Stage.Handle){if(Testing&&!page.AttachFailed)Console.WriteLine("Parent failure app="+page.App+" error="+error+" actual="+Native.GetParent(window));page.AttachFailed=true;return;}
+                page.AttachFailed=false;page.Attached.Restart();
+                if(Testing)Console.WriteLine("Parent attached for editor "+page.App);
+                Native.SetWindowPos(window,IntPtr.Zero,0,0,Stage.ClientSize.Width,Stage.ClientSize.Height,0x4034);
+                Native.ShowWindowAsync(window,page==ActivePage?5:0);ResizeEditors();
+                if(page==ActivePage)Native.FocusEditor(window);
+                if(page.CloseSent)Native.PostMessage(window,0x0010,IntPtr.Zero,IntPtr.Zero);
+                status.Text=page.Title;
+            }));}catch(InvalidOperationException){}
+        });
     }
     private void ClosingWorkspace(object sender,FormClosingEventArgs e)
     {
