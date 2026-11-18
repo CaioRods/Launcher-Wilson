@@ -27,7 +27,7 @@ internal sealed class EditorPage
     internal IntPtr Window;
     internal readonly Stopwatch Opening = Stopwatch.StartNew();
     internal readonly Stopwatch Attached = new Stopwatch();
-    internal bool CloseSent;
+    internal bool CloseSent, AttachFailed;
 }
 
 internal sealed class SuiteHost : Form
@@ -211,7 +211,13 @@ internal sealed class SuiteHost : Form
                     Native.SetWindowLongPtr(window,-16,new IntPtr((style & ~0x80CF0000L) | 0x46000000L)); // child, clip siblings
                     if(Testing)Console.WriteLine("Applying parent for editor "+p.App);
                     Native.SetParent(window,Stage.Handle);
-                    if(Native.GetParent(window)!=Stage.Handle) { status.Text="Não foi possível integrar a página. Feche o app e tente novamente.";continue; }
+                    int parentError=Marshal.GetLastWin32Error();
+                    // Winit may refresh its styles while processing the parent's DPI/size messages.
+                    // Preserve WS_CHILD after that refresh so GetParent and clipping stay correct.
+                    long childStyle=Native.GetWindowLongPtr(window,-16).ToInt64();
+                    Native.SetWindowLongPtr(window,-16,new IntPtr((childStyle & ~0x80CF0000L) | 0x46000000L));
+                    if(Native.GetParent(window)!=Stage.Handle) { if(Testing && !p.AttachFailed)Console.WriteLine("Parent failure app="+p.App+" error="+parentError+" actual="+Native.GetParent(window)+" expected="+Stage.Handle+" style="+Native.GetWindowLongPtr(window,-16));p.AttachFailed=true;status.Text="Não foi possível integrar a página. Feche o app e tente novamente.";continue; }
+                    p.AttachFailed=false;
                     long ex=Native.GetWindowLongPtr(window,-20).ToInt64();Native.SetWindowLongPtr(window,-20,new IntPtr(ex & ~0x00040000L));
                     if(Testing)Console.WriteLine("Parent attached for editor "+p.App);
                     p.Window=window;p.Attached.Restart();Native.SetWindowPos(window,IntPtr.Zero,0,0,Stage.ClientSize.Width,Stage.ClientSize.Height,0x4034);
@@ -525,7 +531,7 @@ internal static class Native
     [DllImport("user32.dll",CharSet=CharSet.Unicode)] internal static extern int GetWindowText(IntPtr h,StringBuilder b,int size);
     [DllImport("user32.dll",EntryPoint="GetWindowLongPtrW")] internal static extern IntPtr GetWindowLongPtr(IntPtr h,int index);
     [DllImport("user32.dll",EntryPoint="SetWindowLongPtrW")] internal static extern IntPtr SetWindowLongPtr(IntPtr h,int index,IntPtr value);
-    [DllImport("user32.dll")] internal static extern IntPtr SetParent(IntPtr child,IntPtr parent);
+    [DllImport("user32.dll",SetLastError=true)] internal static extern IntPtr SetParent(IntPtr child,IntPtr parent);
     [DllImport("user32.dll")] internal static extern IntPtr GetParent(IntPtr h);
     [DllImport("user32.dll")] internal static extern bool ShowWindowAsync(IntPtr h,int command);
     [DllImport("user32.dll")] internal static extern bool MoveWindow(IntPtr h,int x,int y,int width,int height,bool redraw);
