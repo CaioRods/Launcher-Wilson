@@ -301,6 +301,50 @@ mod tests {
     }
 
     #[test]
+    fn app_logo_and_name_are_side_by_side_without_overlap() {
+        let ctx = egui::Context::default();
+        let mut output = ctx.run_ui(
+            egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 200.0))), ..Default::default() },
+            |ui| {
+                super::show_with_style(
+                    ui,
+                    &[],
+                    super::Style {
+                        brand: "Excel AW",
+                        accent: egui::Color32::DARK_RED,
+                        active: egui::Color32::WHITE,
+                        text: egui::Color32::BLACK,
+                        on_accent: egui::Color32::WHITE,
+                        trailing_width: 44.0,
+                        logo: Some(egui::TextureId::User(42)),
+                    },
+                    false,
+                    |_| {},
+                );
+            },
+        );
+        let shapes = std::mem::take(&mut output.shapes);
+        output.drop_without_applying_deltas();
+        let text = shapes
+            .iter()
+            .find_map(|s| match &s.shape {
+                egui::Shape::Text(t) if t.galley.job.text == "Excel AW" => Some(t),
+                _ => None,
+            })
+            .unwrap();
+        let logo = shapes
+            .iter()
+            .find_map(|s| match &s.shape {
+                egui::Shape::Mesh(m) if m.texture_id == egui::TextureId::User(42) => Some(m),
+                _ => None,
+            })
+            .unwrap();
+        let right = logo.vertices.iter().map(|v| v.pos.x).fold(f32::NEG_INFINITY, f32::max);
+        assert!(text.pos.x >= right + 6.0, "logo must stay beside the name with a visible gap");
+        assert!(text.pos.x + text.galley.size().x < 106.0, "name must fit inside the app brand button");
+    }
+
+    #[test]
     fn pointer_drag_reorders_tabs() {
         let ctx = egui::Context::default();
         let entries = vec![(1, "First".into(), true), (2, "Second".into(), false)];

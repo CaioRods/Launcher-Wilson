@@ -4,18 +4,33 @@ use egui::{Align2, Color32, FontId, Painter, Rect, Response, Sense, Stroke, Ui, 
 pub const WIDTH: f32 = 196.0;
 
 pub fn background(ui: &Ui, rect: Rect, dark: bool) {
-    let (top, bottom) = if dark {
-        (Color32::from_rgb(91, 52, 48), Color32::from_rgb(46, 33, 34))
+    // Nearly opaque tinted glass keeps white labels readable without flattening the gradient.
+    let stops = if dark {
+        [
+            Color32::from_rgba_unmultiplied(104, 57, 64, 246),
+            Color32::from_rgba_unmultiplied(66, 37, 49, 242),
+            Color32::from_rgba_unmultiplied(34, 26, 38, 250),
+        ]
     } else {
-        (Color32::from_rgb(160, 56, 52), Color32::from_rgb(109, 42, 42))
+        [
+            Color32::from_rgba_unmultiplied(177, 63, 60, 246),
+            Color32::from_rgba_unmultiplied(133, 46, 52, 240),
+            Color32::from_rgba_unmultiplied(67, 31, 44, 250),
+        ]
     };
     let mut mesh = egui::Mesh::default();
-    for (point, color) in [(rect.left_top(), top), (rect.right_top(), top), (rect.right_bottom(), bottom), (rect.left_bottom(), bottom)] {
-        mesh.colored_vertex(point, color);
+    for (y, color) in [(rect.top(), stops[0]), (rect.center().y, stops[1]), (rect.bottom(), stops[2])] {
+        mesh.colored_vertex(pos2(rect.left(), y), color);
+        mesh.colored_vertex(pos2(rect.right(), y), color);
     }
-    mesh.add_triangle(0, 1, 2);
-    mesh.add_triangle(0, 2, 3);
+    for top in [0, 2] {
+        mesh.add_triangle(top, top + 1, top + 3);
+        mesh.add_triangle(top, top + 3, top + 2);
+    }
     ui.painter().add(egui::Shape::mesh(mesh));
+    let light = Rect::from_center_size(pos2(rect.right(), rect.top() + rect.height() * 0.18), vec2(rect.width() * 0.9, rect.height() * 0.4));
+    ui.painter().add(egui::epaint::RectShape::filled(light, 32, Color32::from_rgba_unmultiplied(255, 215, 180, 17)).with_blur_width(45.0));
+    ui.painter().line_segment([rect.right_top(), rect.right_bottom()], Stroke::new(1.0, Color32::from_white_alpha(30)));
 }
 
 pub fn row(ui: &mut Ui, label: &str, selected: bool, enabled: bool, rtl: bool, icon: impl FnOnce(&Painter, Rect, Color32)) -> Response {
