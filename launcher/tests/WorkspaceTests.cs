@@ -96,6 +96,7 @@ internal static class WorkspaceTests
                 timer.Start();Application.Run(host);
                 Require(failure==null,failure??"");Require(phase==6,"test ended before all checks");
             }
+            if(real){Standalone(0,excel);Standalone(1,word);}
             Console.WriteLine(real?"Real Excel/Word workspace integration passed.":"Workspace tabs, routing, resize, Home and Cancel lifecycle passed.");return 0;
         }
         catch(Exception error){Console.Error.WriteLine(error);return 1;}
@@ -103,6 +104,16 @@ internal static class WorkspaceTests
         {
             foreach(var p in all)try{if(!p.HasExited)p.Kill();}catch(InvalidOperationException){}
             try{Directory.Delete(folder,true);}catch(IOException){}catch(UnauthorizedAccessException){}
+        }
+    }
+    private static void Standalone(int app,string path)
+    {
+        using(var p=Process.Start(new ProcessStartInfo(Distribution.InstalledPath(app),SuiteHost.Quote(path)){UseShellExecute=false}))
+        {
+            var clock=Stopwatch.StartNew();IntPtr window=IntPtr.Zero;
+            while(clock.ElapsedMilliseconds<30000 && !p.HasExited){window=Native.FindWindow(p.Id);if(window!=IntPtr.Zero && Native.IsWindowVisible(window))break;System.Threading.Thread.Sleep(100);}
+            try{Require(window!=IntPtr.Zero && !p.HasExited,"standalone editor must still open without AWcontrol");Require(Native.GetParent(window)==IntPtr.Zero,"standalone editor must own its native window");Require((Native.GetWindowLongPtr(window,-16).ToInt64() & 0x00C00000L)==0,"Word and Excel must both use the integrated header");Native.PostMessage(window,0x0010,IntPtr.Zero,IntPtr.Zero);Require(p.WaitForExit(10000),"clean standalone document must close normally");}
+            finally{if(!p.HasExited)p.Kill();}
         }
     }
     private static void Require(bool valid,string error){if(!valid)throw new Exception(error);}

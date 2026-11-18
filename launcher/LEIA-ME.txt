@@ -1,16 +1,18 @@
-CENTRAL DE APPS ALIMENTOS WILSON
+AWCONTROL · ALIMENTOS WILSON
 
-1. Extraia todo o ZIP em uma pasta no computador.
-2. Abra Alimentos Wilson.exe.
-3. Escolha um aplicativo ou clique em Instalar os dois.
+1. Extraia os ZIPs até encontrar Alimentos Wilson.exe e a pasta instaladores.
+2. Abra Alimentos Wilson.exe: a Home permite criar planilhas e documentos.
+3. Use Instalar / atualizar apps para instalar as versões incluídas no pacote.
 
-Com a opção para todos os usuários desligada, a central instala no perfil atual.
-Para instalar para todo o computador, ligue a opção e confirme a permissão de administrador.
-As políticas de TI do computador continuam valendo para os dois modos.
+As páginas de Excel AW e Word AW ficam em abas na mesma janela. Arraste as
+abas para reorganizar e use x para fechar. Os editores perguntam sobre
+alterações não salvas; Cancelar mantém a página aberta.
 
-Buscar atualizações consulta o GitHub. Quando houver um pacote MSI x64 validado
-em uma versão publicada, a central oferece a atualização de cada app.
-O pacote inicial permite instalar sem internet.
+Com o AWcontrol aberto, arquivos abertos pelo Explorer são encaminhados para
+a central. Sem a central, Excel AW e Word AW continuam abrindo individualmente.
 
-Windows 10 ou 11, 64 bits (x64).
-Os arquivos MSI também podem ser abertos diretamente na pasta instaladores.
+A instalação padrão é para seu usuário. A opção de instalar para todos os
+usuários pede a permissão de administrador do Windows. O pacote permite
+instalar sem internet; Buscar atualizações consulta as Releases no GitHub.
+
+Windows 10 ou 11 x64. Mantenha a pasta instaladores ao lado do executável.

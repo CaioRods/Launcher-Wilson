@@ -112,6 +112,8 @@ jobs:
         with:
           persist-credentials: false
       - name: Compilar e testar inicialização
+        env:
+          AWCONTROL_TEST_SCREENSHOTS: ${{ runner.temp }}\aw-previews
         run: |
           New-Item -ItemType Directory central | Out-Null
           ./launcher/build.ps1 -Destination central
@@ -119,6 +121,12 @@ jobs:
         with:
           name: Central-executavel
           path: central/
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AWcontrol-UI-previews
+          path: ${{ runner.temp }}/aw-previews/
           if-no-files-found: error
 
   regressions:
@@ -157,10 +165,12 @@ jobs:
           if [ '${{ matrix.app }}' = 'Excel' ]; then
             cargo test --locked -p gridcraft-ui-egui --test it drag_cursor::ctrl_ -- --nocapture
             cargo test --locked -p gridcraft-ui-egui --lib aw_surface_tests -- --nocapture
+            cargo test --locked -p gridcraft-ui-egui --lib aw_deselection_tests -- --nocapture
             cargo test --locked -p gridcraft-ui-egui --test it file_menu::aw_sidebar_ -- --nocapture
           else
             cargo test --locked -p wordcraft-ui-egui --lib backstage::tests::aw_sidebar_ -- --nocapture
             cargo test --locked -p wordcraft-ui-egui --lib aw_surface_tests -- --nocapture
+            cargo test --locked -p wordcraft-ui-egui --lib aw_host_tests -- --nocapture
             cargo test --locked -p wordcraft-ui-egui --lib every_side_menu_item_has_a_drawn_icon -- --nocapture
           fi
 
@@ -179,6 +189,19 @@ jobs:
           pattern: '*-AW-x64'
           path: pacote/instaladores
           merge-multiple: true
+      - uses: actions/checkout@v4
+        with:
+          path: central-source
+          persist-credentials: false
+      - name: Validar Excel e Word reais dentro do AWcontrol
+        env:
+          AWCONTROL_TEST_SCREENSHOTS: ${{ runner.temp }}\aw-real-previews
+        run: ./central-source/launcher/test-workspace-installed.ps1 -Packages pacote/instaladores
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AWcontrol-real-editors-previews
+          path: ${{ runner.temp }}/aw-real-previews/
+          if-no-files-found: error
       - name: Verificar o conteúdo e montar pacote
         run: |
           foreach ($app in @('Excel','Word')) {
