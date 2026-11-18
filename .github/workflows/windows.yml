@@ -27,11 +27,11 @@ jobs:
         include:
           - app: Excel
             repository: CaioRods/Excel-AW
-            revision: 04a7bf9abc130ac13ba272f246b265d9661133cf
+            revision: 922aef2ceb5f53624ad2a061f31eeb7fcc259bef
             package: gridcraft
           - app: Word
             repository: CaioRods/Word-AW
-            revision: db33f26763a03832d9ef6ecb3ff4f9c24e24084a
+            revision: 47c76d0af984e1ee4befe7afd3f57ecc86caa459
             package: wordcraft
     steps:
       - uses: actions/checkout@v4
@@ -117,10 +117,51 @@ jobs:
           path: central/
           if-no-files-found: error
 
+  regressions:
+    if: ${{ !inputs.central_only }}
+    name: Regressões ${{ matrix.app }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: Excel
+            repository: CaioRods/Excel-AW
+            revision: 922aef2ceb5f53624ad2a061f31eeb7fcc259bef
+          - app: Word
+            repository: CaioRods/Word-AW
+            revision: 47c76d0af984e1ee4befe7afd3f57ecc86caa459
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.repository }}
+          ref: ${{ matrix.revision }}
+          persist-credentials: false
+      - name: Preparar testes de interface
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal
+          sudo apt-get update -qq
+          sudo apt-get install -y pkg-config libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev libgtk-3-dev libfontconfig1-dev libfreetype-dev
+      - name: Validar seleção, navegação e superfícies
+        env:
+          RUSTUP_TOOLCHAIN: 1.95.0
+          CARGO_PROFILE_DEV_DEBUG: '0'
+          CARGO_PROFILE_TEST_DEBUG: '0'
+          CARGO_INCREMENTAL: '0'
+        run: |
+          if [ '${{ matrix.app }}' = 'Excel' ]; then
+            cargo test --locked -p gridcraft-ui-egui --test it drag_cursor::ctrl_ -- --nocapture
+            cargo test --locked -p gridcraft-ui-egui --lib aw_surface_tests -- --nocapture
+          else
+            cargo test --locked -p wordcraft-ui-egui --lib aw_sidebar_matches_excel -- --nocapture
+            cargo test --locked -p wordcraft-ui-egui --lib aw_surface_tests -- --nocapture
+          fi
+
   bundle:
     if: ${{ !inputs.central_only }}
     name: Montar o ZIP final
-    needs: [installers, central]
+    needs: [installers, central, regressions]
     runs-on: windows-2022
     steps:
       - uses: actions/download-artifact@v4

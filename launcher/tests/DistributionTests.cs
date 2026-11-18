@@ -22,12 +22,12 @@ internal static class DistributionTests
         Check(Distribution.ButtonText(0, true, false) == "Abrir Excel AW");
         Check(Distribution.ButtonText(1, true, false) == "Abrir Word AW");
         Check(Distribution.ButtonText(1, true, true) == "Atualizar Word AW");
-        Check(Distribution.ChooseUpdate(0, new Version(1, 41, 7), true, null).Version == new Version(1, 41, 8));
-        Check(Distribution.ChooseUpdate(0, new Version(1, 41, 8), true, null) == null);
-        Check(Distribution.ChooseUpdate(0, new Version(1, 41, 8), false, null) == null);
-        Check(Distribution.ChooseUpdate(1, new Version(0, 18, 3), true, null).Version == new Version(0, 18, 4));
+        Check(Distribution.ChooseUpdate(0, new Version(1, 41, 8), true, null).Version == new Version(1, 41, 9));
+        Check(Distribution.ChooseUpdate(0, new Version(1, 41, 9), true, null) == null);
+        Check(Distribution.ChooseUpdate(0, new Version(1, 41, 9), false, null) == null);
+        Check(Distribution.ChooseUpdate(1, new Version(0, 18, 4), true, null).Version == new Version(0, 18, 5));
         var remote = new Update { Version = new Version(1, 42, 0), Url = new Uri("https://github.com/") };
-        Check(Distribution.ChooseUpdate(0, new Version(1, 41, 7), true, remote) == remote);
+        Check(Distribution.ChooseUpdate(0, new Version(1, 41, 8), true, remote) == remote);
         Check(Distribution.ChooseUpdate(0, new Version(2, 0, 0), true, remote) == null);
         string folder = Path.Combine(Path.GetTempPath(), "AW-test-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(folder);
