@@ -31,11 +31,11 @@ jobs:
         include:
           - app: Excel
             repository: CaioRods/Excel-AW
-            revision: 751dddc3703e23d6983f6b4dec2facd937ec0ebf
+            revision: c7c1e1f2a759afaba68acda4525224447dd504f8
             package: gridcraft
           - app: Word
             repository: CaioRods/Word-AW
-            revision: d51bbf6630640ecaaa820bde02e054dd8fc488da
+            revision: 1b2aad548778f1f2bb3914e3a93ad9189f06d1a2
             package: wordcraft
     steps:
       - uses: actions/checkout@v4
@@ -142,10 +142,10 @@ jobs:
         include:
           - app: Excel
             repository: CaioRods/Excel-AW
-            revision: 751dddc3703e23d6983f6b4dec2facd937ec0ebf
+            revision: c7c1e1f2a759afaba68acda4525224447dd504f8
           - app: Word
             repository: CaioRods/Word-AW
-            revision: d51bbf6630640ecaaa820bde02e054dd8fc488da
+            revision: 1b2aad548778f1f2bb3914e3a93ad9189f06d1a2
     steps:
       - uses: actions/checkout@v4
         with:
@@ -171,6 +171,7 @@ jobs:
             cargo test --locked -p gridcraft-ui-egui --lib aw_surface_tests -- --nocapture
             cargo test --locked -p gridcraft-ui-egui --lib aw_deselection_tests -- --nocapture
             cargo test --locked -p gridcraft-ui-egui --test it file_menu::aw_sidebar_ -- --nocapture
+            cargo test --locked -p gridcraft-ui-egui --test it file_menu::hosted_excel_dont_save -- --nocapture
           else
             cargo test --locked -p wordcraft-ui-egui --lib backstage::tests::aw_sidebar_ -- --nocapture
             cargo test --locked -p wordcraft-ui-egui --lib aw_surface_tests -- --nocapture
