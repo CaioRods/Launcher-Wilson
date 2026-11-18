@@ -191,7 +191,7 @@ jobs:
           [ "$passed" = success ] || exit 1
           source=$(gh api "repos/CaioRods/Launcher-Wilson/actions/runs/$REUSE_RUN" --jq .head_sha)
           gh api "repos/CaioRods/Launcher-Wilson/contents/.github/workflows/windows.yml?ref=$source" --jq .content | base64 -d > previous.yml
-          rg -F "revision: $REVISION" previous.yml
+          grep -F "revision: $REVISION" previous.yml
 
   bundle:
     if: ${{ !inputs.central_only }}
