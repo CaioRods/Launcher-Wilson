@@ -33,6 +33,12 @@ pub fn background(ui: &Ui, rect: Rect, dark: bool) {
     ui.painter().line_segment([rect.right_top(), rect.right_bottom()], Stroke::new(1.0, Color32::from_white_alpha(30)));
 }
 
+/// Keeps the fixed Account/Options footer clear when the window is too short for every command.
+pub fn scroll_main(ui: &mut Ui, id: &'static str, contents: impl FnOnce(&mut Ui)) {
+    let height = (ui.available_height() - 82.0).max(0.0);
+    egui::ScrollArea::vertical().id_salt(id).max_height(height).auto_shrink([false, true]).show(ui, contents);
+}
+
 pub fn row(ui: &mut Ui, label: &str, selected: bool, enabled: bool, rtl: bool, icon: impl FnOnce(&Painter, Rect, Color32)) -> Response {
     let (rect, response) = ui.add_enabled_ui(enabled, |ui| ui.allocate_exact_size(vec2(WIDTH, 38.0), Sense::click())).inner;
     let text = if enabled { Color32::WHITE } else { Color32::from_gray(180) };
