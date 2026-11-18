@@ -44,7 +44,8 @@ internal static class WorkspaceTests
                 {
                     try
                     {
-                        if(timeout.Elapsed.TotalSeconds>120)throw new Exception("Workspace test timeout at phase "+phase);
+                        if(timeout.Elapsed.TotalSeconds>45)throw new Exception("Workspace test timeout at phase "+phase+"; "+host.CloseStatus);
+                        if(phase==6 && since.ElapsedMilliseconds>2000){Console.WriteLine("Closing: "+host.CloseStatus);since.Restart();}
                         if(phase==0)
                         {
                             Capture(host,real?"real-home":"home");host.OpenDocument(0,null);host.OpenDocument(1,word);all.AddRange(host.Pages.Select(p=>p.Process));first=host.Pages[0];second=host.Pages[1];phase=1;return;

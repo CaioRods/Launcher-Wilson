@@ -44,6 +44,7 @@ internal sealed class SuiteHost : Form
     private readonly System.Windows.Forms.Timer movement=new System.Windows.Forms.Timer{Interval=16};
     private readonly Stopwatch transition=new Stopwatch();
     internal bool Testing;
+    internal string CloseStatus { get { return "closeAll="+closeAll+"; "+string.Join(" | ",Pages.Select(p=>p.Title+", requested="+p.CloseSent+", exited="+p.Process.HasExited)); } }
     private ListBox recent;
     private static readonly string StateDir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AlimentosWilson");
     private static readonly string RecentPath = System.IO.Path.Combine(StateDir,"recent.json");
@@ -60,7 +61,7 @@ internal sealed class SuiteHost : Form
         AutoScaleMode = AutoScaleMode.Dpi;
         AutoScaleDimensions = new SizeF(96,96);
         FormBorderStyle = FormBorderStyle.None;
-        MinimumSize = new Size(820,540);
+        MinimumSize = new Size(820,560);
         Size = new Size(1440,900);
         StartPosition = FormStartPosition.CenterScreen;
         BackColor = Color.FromArgb(248,248,249);
