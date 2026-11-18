@@ -137,12 +137,25 @@ internal static class WorkspaceTests
         host.Home.UpdateProfile("Caio Rodrigues",null);host.Refresh();host.Home.Refresh();
         Require(host.Home.ActionBounds("app0new").Width>0&&host.Home.ActionBounds("app1new").Width>0,"both creation actions must be visible at desktop size");
         Require(!host.Home.ActionBounds("app0new").IntersectsWith(host.Home.ActionBounds("app1new")),"app actions must not overlap");
-        CaptureHome(host,"home-reference-desktop");
+        CaptureHome(host,"home-reference-desktop");CaptureWideHome(host);
         host.Home.SearchText="TOPS";host.Home.Refresh();Require(host.Home.FilteredFiles().Length==1,"search must filter real file names");host.Home.InvokeAction("favorite0");host.Home.Navigate("favorites");host.Home.SearchText="";host.Home.Refresh();Require(host.Home.FilteredFiles().Length==1,"favorites must contain only the selected file");CaptureHome(host,"home-favorites");
         host.Home.Navigate("models");host.Home.Refresh();Require(host.Home.ActionBounds("modelbudget").Width>0,"budget model must be actionable");CaptureHome(host,"home-models");
         host.Home.Navigate("settings");host.Home.Refresh();bool before=host.Home.Animations;host.Home.InvokeAction("motion");Require(!host.Home.Animations,"reduced motion must disable transitions");host.Home.InvokeAction("motion");host.Home.Refresh();
         host.Home.Navigate("home");host.Size=new Size(820,560);host.Home.Refresh();var profile=host.Home.ActionBounds("profile");var settings=host.Home.ActionBounds("settings");Require(!profile.IntersectsWith(settings),"sidebar account and settings must not overlap at minimum height");CaptureHome(host,"home-reference-compact");
         host.Size=new Size(1000,700);host.Home.Refresh();
+    }
+    private static void CaptureWideHome(SuiteHost host)
+    {
+        string folder=Environment.GetEnvironmentVariable("AWCONTROL_TEST_SCREENSHOTS");if(string.IsNullOrEmpty(folder))return;
+        var strip=host.Controls.OfType<WorkspaceStrip>().Single();var homeBounds=host.Home.Bounds;var stripBounds=strip.Bounds;
+        try
+        {
+            host.Home.Dock=DockStyle.None;strip.Dock=DockStyle.None;strip.SetBounds(0,0,1440,48);host.Home.SetBounds(0,0,1440,852);host.Home.Refresh();
+            Require(host.Home.ActionBounds("modelbudget").Width>0,"wide Home must include the working template sidebar");
+            using(var top=new Bitmap(1440,48))using(var body=new Bitmap(1440,852))using(var image=new Bitmap(1440,900))
+            {strip.DrawToBitmap(top,new Rectangle(Point.Empty,top.Size));host.Home.DrawToBitmap(body,new Rectangle(Point.Empty,body.Size));using(var g=Graphics.FromImage(image)){g.DrawImageUnscaled(top,0,0);g.DrawImageUnscaled(body,0,48);}image.Save(Path.Combine(folder,"home-reference-wide.png"));}
+        }
+        finally{host.Home.Bounds=homeBounds;strip.Bounds=stripBounds;host.Home.Dock=DockStyle.Fill;strip.Dock=DockStyle.Top;host.PerformLayout();}
     }
     private static void CaptureHome(Form form,string name)
     {
