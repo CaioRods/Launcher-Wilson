@@ -48,6 +48,7 @@ internal static class WorkspaceTests
                         if(phase==6 && since.ElapsedMilliseconds>2000){Console.WriteLine("Closing: "+host.CloseStatus);since.Restart();}
                         if(phase==0)
                         {
+                            if(!real)CheckHome(host,folder);
                             Console.WriteLine("Opening editor processes");Capture(host,real?"real-home":"home");host.OpenDocument(0,null);host.OpenDocument(1,word);all.AddRange(host.Pages.Select(p=>p.Process));first=host.Pages[0];second=host.Pages[1];phase=1;Console.WriteLine("Waiting for native editor windows");return;
                         }
                         if(phase==1 && host.Pages.Count==2 && host.Pages.All(p=>p.Window!=IntPtr.Zero && Native.IsWindow(p.Window) && Native.GetParent(p.Window)==host.Stage.Handle && p.Attached.ElapsedMilliseconds>1000))
@@ -115,6 +116,25 @@ internal static class WorkspaceTests
             foreach(var p in all)try{if(!p.HasExited)p.Kill();}catch(InvalidOperationException){}
             try{Directory.Delete(folder,true);}catch(IOException){}catch(UnauthorizedAccessException){}
         }
+    }
+    private static void CheckHome(SuiteHost host,string folder)
+    {
+        host.Size=new Size(1440,900);
+        string[] names={"TOPS SANKHYA.xlsx","Relatório mensal.docx","Controle de estoque.xlsx","Proposta comercial.docx"};
+        foreach(string name in names){string path=Path.Combine(folder,name);File.WriteAllText(path,"Home fixture");host.Home.AddRecent(path);}
+        host.Home.UpdateProfile("Caio Rodrigues",null);host.Refresh();host.Home.Refresh();
+        Require(host.Home.ActionBounds("app0new").Width>0&&host.Home.ActionBounds("app1new").Width>0,"both creation actions must be visible at desktop size");
+        Require(!host.Home.ActionBounds("app0new").IntersectsWith(host.Home.ActionBounds("app1new")),"app actions must not overlap");
+        CaptureHome(host,"home-reference-desktop");
+        host.Home.SearchText="TOPS";host.Home.Refresh();Require(host.Home.FilteredFiles().Length==1,"search must filter real file names");host.Home.InvokeAction("favorite0");host.Home.Navigate("favorites");host.Home.SearchText="";host.Home.Refresh();Require(host.Home.FilteredFiles().Length==1,"favorites must contain only the selected file");CaptureHome(host,"home-favorites");
+        host.Home.Navigate("models");host.Home.Refresh();Require(host.Home.ActionBounds("modelbudget").Width>0,"budget model must be actionable");CaptureHome(host,"home-models");
+        host.Home.Navigate("settings");host.Home.Refresh();bool before=host.Home.Animations;host.Home.InvokeAction("motion");Require(!host.Home.Animations,"reduced motion must disable transitions");host.Home.InvokeAction("motion");host.Home.Refresh();
+        host.Home.Navigate("home");host.Size=new Size(820,560);host.Home.Refresh();var profile=host.Home.ActionBounds("profile");var settings=host.Home.ActionBounds("settings");Require(!profile.IntersectsWith(settings),"sidebar account and settings must not overlap at minimum height");CaptureHome(host,"home-reference-compact");
+        host.Size=new Size(1000,700);host.Home.Refresh();
+    }
+    private static void CaptureHome(Form form,string name)
+    {
+        string folder=Environment.GetEnvironmentVariable("AWCONTROL_TEST_SCREENSHOTS");if(string.IsNullOrEmpty(folder))return;Directory.CreateDirectory(folder);using(var image=new Bitmap(form.ClientSize.Width,form.ClientSize.Height)){form.DrawToBitmap(image,new Rectangle(Point.Empty,image.Size));image.Save(Path.Combine(folder,name+".png"));}
     }
     private static void Standalone(int app,string path)
     {

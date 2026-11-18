@@ -5,7 +5,7 @@ $test = Join-Path $env:RUNNER_TEMP ('AWcontrol-workspace-tests-' + [guid]::NewGu
 $stdout = "$test.stdout.log"
 $stderr = "$test.stderr.log"
 try {
-  & $compiler /nologo /codepage:65001 /target:exe /platform:x64 /main:WorkspaceTests /reference:System.Drawing.dll /reference:System.Windows.Forms.dll /reference:System.Web.Extensions.dll "/win32manifest:$PSScriptRoot\workspace.manifest" "/resource:$PSScriptRoot\assets\wilson.png,wilson" "/resource:$PSScriptRoot\assets\excel.png,excel" "/resource:$PSScriptRoot\assets\word.png,word" "/out:$test" "$PSScriptRoot\Program.cs" "$PSScriptRoot\Workspace.cs" "$PSScriptRoot\Distribution.cs" "$PSScriptRoot\tests\WorkspaceTests.cs"
+  & $compiler /nologo /codepage:65001 /target:exe /platform:x64 /main:WorkspaceTests /reference:Accessibility.dll /reference:System.Drawing.dll /reference:System.Windows.Forms.dll /reference:System.Web.Extensions.dll "/win32manifest:$PSScriptRoot\workspace.manifest" "/resource:$PSScriptRoot\assets\wilson.png,wilson" "/resource:$PSScriptRoot\assets\awcontrol.png,awcontrol" "/resource:$PSScriptRoot\assets\excel.png,excel" "/resource:$PSScriptRoot\assets\word.png,word" "/out:$test" "$PSScriptRoot\Program.cs" "$PSScriptRoot\HomeView.cs" "$PSScriptRoot\Workspace.cs" "$PSScriptRoot\Distribution.cs" "$PSScriptRoot\tests\WorkspaceTests.cs"
   if ($LASTEXITCODE -ne 0) { throw 'Falha ao compilar os testes do AWcontrol.' }
   $parameters = @{ FilePath=$test; PassThru=$true; RedirectStandardOutput=$stdout; RedirectStandardError=$stderr }
   if ($Real) { $parameters.ArgumentList = '--real' }

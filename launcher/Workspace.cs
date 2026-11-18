@@ -36,7 +36,7 @@ internal sealed class SuiteHost : Form
     internal EditorPage ActivePage;
     internal readonly Panel Stage = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(248,248,249) };
     private readonly WorkspaceStrip strip;
-    private readonly Panel home = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+    internal readonly WilsonHome Home;
     private readonly Label status = new Label { Dock = DockStyle.Bottom, Height = 26, Padding = new Padding(18,4,0,0) };
     private readonly System.Windows.Forms.Timer poll = new System.Windows.Forms.Timer { Interval = 100 };
     private readonly Func<int,string> locate;
@@ -46,18 +46,22 @@ internal sealed class SuiteHost : Form
     private readonly Stopwatch transition=new Stopwatch();
     internal bool Testing;
     internal string CloseStatus { get { return "closeAll="+closeAll+"; "+string.Join(" | ",Pages.Select(p=>p.Title+", requested="+p.CloseSent+", exited="+p.Process.HasExited)); } }
-    private ListBox recent;
+
     private static readonly string StateDir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AlimentosWilson");
-    private static readonly string RecentPath = System.IO.Path.Combine(StateDir,"recent.json");
+
     internal static readonly Color Red = Color.FromArgb(161,57,54), Gold = Color.FromArgb(168,113,15);
     internal static readonly Image[] Logos = { LoadArt("excel"), LoadArt("word") };
     internal static readonly Image Brand = LoadArt("wilson");
+    internal static readonly Image ControlIcon = LoadArt("awcontrol");
+    internal bool AnimateUI {get{return Home==null||Home.Animations;}}
+    internal void RefreshAnimations(){strip.Animate();}
+    internal void Notify(string text){status.Text=text;status.Visible=true;}
 
     internal SuiteHost(Func<int,string> find = null, bool testing = false)
     {
         Testing = testing;
         locate = find ?? (Func<int,string>)Distribution.InstalledPath;
-        Text = "AWcontrol · Alimentos Wilson";
+        Text = "Wilson Control · Alimentos Wilson";
         Font = new Font("Segoe UI",10);
         AutoScaleMode = AutoScaleMode.Dpi;
         AutoScaleDimensions = new SizeF(96,96);
@@ -67,15 +71,17 @@ internal sealed class SuiteHost : Form
         StartPosition = FormStartPosition.CenterScreen;
         BackColor = Color.FromArgb(248,248,249);
         Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
-        strip = new WorkspaceStrip(this) { Dock = DockStyle.Top, Height = 36 };
+        Home = new WilsonHome(this);
+        strip = new WorkspaceStrip(this) { Dock = DockStyle.Top, Height = 48 };
         Controls.Add(Stage); Controls.Add(status); Controls.Add(strip);
-        Stage.Controls.Add(home);
-        MakeHome();
+        Stage.Controls.Add(Home);
+        status.Visible=false;
+        status.TextChanged+=(s,e)=>{status.Visible=new[]{"Não","Arquivo não","Feche","Falha","O editor"}.Any(prefix=>status.Text.StartsWith(prefix,StringComparison.Ordinal));};
         AllowDrop = true;
         DragEnter += (s,e) => { if(e.Data.GetDataPresent(DataFormats.FileDrop)) e.Effect=DragDropEffects.Copy; };
         DragDrop += (s,e) => { var paths=e.Data.GetData(DataFormats.FileDrop) as string[]; if(paths!=null) foreach(var p in paths) OpenDocument(Kind(p),p); };
         Stage.Resize += (s,e) => ResizeEditors();
-        poll.Tick += (s,e) => { TickEditors(); strip.RefreshProfile(); };
+        poll.Tick += (s,e) => { TickEditors(); strip.RefreshProfile(); Home.UpdateProfile(strip.ProfileName,strip.Avatar); };
         poll.Start();
         movement.Tick+=(s,e)=>{if(ActivePage==null || ActivePage.Window==IntPtr.Zero || transition.ElapsedMilliseconds>=150){movement.Stop();ResizeEditors();return;}float t=(float)transition.ElapsedMilliseconds/150;int x=(int)(12*Math.Pow(1-t,3));Native.Resize(ActivePage.Window,x,0,Stage.ClientSize.Width,Stage.ClientSize.Height);};
         Shown += (s,e) => { MaximizedBounds=Screen.FromHandle(Handle).WorkingArea; };
@@ -151,7 +157,7 @@ internal sealed class SuiteHost : Form
             page.Process=Process.Start(info);
             if(page.Process==null){ status.Text="Não foi possível abrir "+Distribution.Names[app];return; }
             Pages.Add(page);SelectPage(page);status.Text="Abrindo "+page.Title+"…";
-            if(path!=null)AddRecent(path);
+            if(path!=null)Home.AddRecent(path);
         }
         catch(Exception e) { if(!(e is System.ComponentModel.Win32Exception || e is IOException || e is UnauthorizedAccessException))throw; status.Text="Não foi possível abrir "+Distribution.Names[app]+": "+e.Message; }
     }
@@ -168,11 +174,11 @@ internal sealed class SuiteHost : Form
         closeAll=false;
         ActivePage=page;
         foreach(var p in Pages) if(p.Window!=IntPtr.Zero) Native.ShowWindowAsync(p.Window,p==page?5:0);
-        home.Visible=page==null;
-        if(page==null)home.BringToFront();
+        Home.Visible=page==null;
+        if(page==null){Home.Navigate("home");Home.BringToFront();}
         else if(page.Window!=IntPtr.Zero){ Native.FocusEditor(page.Window);status.Text=page.Title; }
         ResizeEditors();strip.EnsureVisible(page);strip.Animate();
-        if(page!=null && page.Window!=IntPtr.Zero && SystemInformation.IsMenuAnimationEnabled){transition.Restart();movement.Start();}
+        if(page!=null && page.Window!=IntPtr.Zero && AnimateUI){transition.Restart();movement.Start();}
     }
     internal void ClosePage(EditorPage page)
     {
@@ -249,58 +255,20 @@ internal sealed class SuiteHost : Form
         if(Pages.Any(p=>p.CloseSent)) { foreach(var p in Pages)p.CloseSent=false; }
         ClosePage(ActivePage??Pages[0]);closeAll=true;
     }
-    private void ManageApps()
+    internal void ManageApps()
     {
         using(var installer=new Central(app=>OpenDocument(app,null))) installer.ShowDialog(this);
     }
-    private void OpenPicker()
+    internal void OpenPicker(int? app=null)
     {
-        using(var d=new OpenFileDialog { Multiselect=true,Filter="Documentos e planilhas|*.xlsx;*.xlsm;*.csv;*.tsv;*.ods;*.docx;*.doc;*.odt;*.rtf;*.txt;*.md|Todos os arquivos|*.*" })
-            if(d.ShowDialog(this)==DialogResult.OK)foreach(var p in d.FileNames)OpenDocument(Kind(p),p);
+        string filter=app==0?"Planilhas|*.xlsx;*.xlsm;*.xls;*.csv;*.tsv;*.ods;*.json|Todos os arquivos|*.*":app==1?"Documentos|*.docx;*.doc;*.odt;*.rtf;*.txt;*.md|Todos os arquivos|*.*":"Documentos e planilhas|*.xlsx;*.xlsm;*.csv;*.tsv;*.ods;*.docx;*.doc;*.odt;*.rtf;*.txt;*.md|Todos os arquivos|*.*";
+        using(var d=new OpenFileDialog { Multiselect=true,Filter=filter })
+            if(d.ShowDialog(this)==DialogResult.OK)foreach(var p in d.FileNames)OpenDocument(app??Kind(p),p);
     }
-    private void MakeHome()
+    internal void OpenTemplate(int app,string key)
     {
-        var layout=new TableLayoutPanel { Dock=DockStyle.Top,AutoSize=true,ColumnCount=1,Padding=new Padding(40,34,40,30) };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));home.Controls.Add(layout);
-        layout.Controls.Add(new Label{Text="Seu trabalho, em um só lugar.",Font=new Font("Segoe UI",28,FontStyle.Bold),AutoSize=true,Margin=new Padding(0,0,0,8)});
-        layout.Controls.Add(new Label{Text="Crie e alterne entre planilhas e documentos nas abas acima.",AutoSize=true,ForeColor=Color.FromArgb(95,96,104),Margin=new Padding(0,0,0,26)});
-        var cards=new FlowLayoutPanel { AutoSize=true,Dock=DockStyle.Top,WrapContents=true,Margin=new Padding(0) };
-        for(int a=0;a<2;a++)
-        {
-            int app=a;
-            var card=new RoundedCard{Size=new Size(324,180),BackColor=Color.White,Margin=new Padding(0,0,20,20),Padding=new Padding(18)};
-            card.Controls.Add(new PictureBox{Image=Logos[a],SizeMode=PictureBoxSizeMode.Zoom,Bounds=new Rectangle(18,18,48,48)});
-            card.Controls.Add(new Label{Text=Distribution.Names[a],Font=new Font("Segoe UI",18,FontStyle.Bold),AutoSize=true,Location=new Point(80,20)});
-            card.Controls.Add(new Label{Text=a==0?"Números, tabelas e ideias organizadas.":"Textos, relatórios e novas histórias.",AutoSize=true,Location=new Point(18,80),ForeColor=Color.DimGray});
-            var create=HomeButton(a==0?"Nova planilha":"Novo documento",a==0?Red:Gold);create.Bounds=new Rectangle(18,119,288,42);create.Click+=(s,e)=>OpenDocument(app,null);card.Controls.Add(create);
-            cards.Controls.Add(card);
-        }
-        layout.Controls.Add(cards);
-        var actions=new FlowLayoutPanel{Dock=DockStyle.Top,AutoSize=true,Margin=new Padding(0,2,0,26)};
-        var open=HomeButton("Abrir arquivo…",Red);open.Click+=(s,e)=>OpenPicker();actions.Controls.Add(open);
-        var manage=HomeButton("Instalar / atualizar apps",Color.FromArgb(83,85,96));manage.Click+=(s,e)=>ManageApps();actions.Controls.Add(manage);layout.Controls.Add(actions);
-        layout.Controls.Add(new Label{Text="Recentes",Font=new Font("Segoe UI",17,FontStyle.Bold),AutoSize=true,Margin=new Padding(0,0,0,12)});
-        recent=new ListBox{Dock=DockStyle.Top,Height=220,BorderStyle=BorderStyle.None,BackColor=home.BackColor,ItemHeight=32,Font=new Font("Segoe UI",11)};
-        recent.DoubleClick+=(s,e)=>{string p=recent.SelectedItem as string;if(p!=null)OpenDocument(Kind(p),p);};layout.Controls.Add(recent);
-        ReadRecent();status.Text="AWcontrol · Excel AW e Word AW";
-    }
-    private static Button HomeButton(string label,Color color)
-    {
-        var b=new RoundedButton{Text=label,Size=new Size(224,42),Margin=new Padding(0,0,14,0),FlatStyle=FlatStyle.Flat,BackColor=color,ForeColor=Color.White,Cursor=Cursors.Hand};b.FlatAppearance.BorderSize=0;
-        return b;
-    }
-    private void ReadRecent()
-    {
-        if(Testing)return;
-        try{if(File.Exists(RecentPath) && new FileInfo(RecentPath).Length<131072) {var paths=new JavaScriptSerializer().Deserialize<string[]>(File.ReadAllText(RecentPath));recent.Items.AddRange(paths.Take(40).Cast<object>().ToArray());}}
-        catch(Exception e) { if(!(e is IOException || e is UnauthorizedAccessException || e is ArgumentException || e is InvalidOperationException))throw;}
-    }
-    private void AddRecent(string path)
-    {
-        if(Testing)return;
-        recent.Items.Remove(path);recent.Items.Insert(0,path);while(recent.Items.Count>40)recent.Items.RemoveAt(40);
-        try{Directory.CreateDirectory(StateDir);File.WriteAllText(RecentPath,new JavaScriptSerializer().Serialize(recent.Items.Cast<string>().ToArray()));}
-        catch(Exception e) { if(!(e is IOException || e is UnauthorizedAccessException))throw;}
+        object args=app==0?(object)new{sample=key}:new{template=key};
+        OpenDocument(app,null,new JavaScriptSerializer().Serialize(new{command="file.new",@params=args}));
     }
     protected override void WndProc(ref Message m)
     {
@@ -315,133 +283,110 @@ internal sealed class SuiteHost : Form
     }
 }
 
-internal sealed class RoundedCard : Panel
-{
-    protected override void OnPaintBackground(PaintEventArgs e)
-    {
-        e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;e.Graphics.Clear(Parent==null?Color.FromArgb(248,248,249):Parent.BackColor);
-        using(var path=WorkspaceStrip.Round(new RectangleF(0,0,Width-1,Height-1),12))using(var fill=new SolidBrush(Color.White))using(var stroke=new Pen(Color.FromArgb(230,230,234))) {e.Graphics.FillPath(fill,path);e.Graphics.DrawPath(stroke,path);}
-    }
-}
-internal sealed class RoundedButton : Button
-{
-    private bool hot,down;
-    internal RoundedButton(){SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.OptimizedDoubleBuffer,true);}
-    protected override void OnMouseEnter(EventArgs e){hot=true;Invalidate();base.OnMouseEnter(e);}
-    protected override void OnMouseLeave(EventArgs e){hot=false;down=false;Invalidate();base.OnMouseLeave(e);}
-    protected override void OnMouseDown(MouseEventArgs e){down=true;Invalidate();base.OnMouseDown(e);}
-    protected override void OnMouseUp(MouseEventArgs e){down=false;Invalidate();base.OnMouseUp(e);}
-    protected override void OnPaint(PaintEventArgs e)
-    {
-        var g=e.Graphics;g.SmoothingMode=SmoothingMode.AntiAlias;g.Clear(Parent==null?Color.White:Parent.BackColor);
-        Color color=Enabled?BackColor:Color.Gray;if(hot)color=ControlPaint.Light(color,down?-0.1f:0.1f);
-        using(var path=WorkspaceStrip.Round(new RectangleF(0,0,Width-1,Height-1),9))using(var brush=new SolidBrush(color))g.FillPath(brush,path);
-        TextRenderer.DrawText(g,Text,Font,ClientRectangle,ForeColor,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter|TextFormatFlags.NoPrefix);
-        if(Focused && ShowFocusCues)ControlPaint.DrawFocusRectangle(g,Rectangle.Inflate(ClientRectangle,-6,-6),ForeColor,color);
-    }
-}
-
 internal sealed class WorkspaceStrip : Control
 {
+    private const int BrandWidth=244,Start=376,TabWidth=224,Right=222;
     private readonly SuiteHost host;
-    private readonly System.Windows.Forms.Timer animation = new System.Windows.Forms.Timer { Interval=16 };
-    private readonly Dictionary<Guid,float> positions = new Dictionary<Guid,float>();
+    private readonly System.Windows.Forms.Timer animation=new System.Windows.Forms.Timer{Interval=16};
+    private readonly Dictionary<Guid,float> positions=new Dictionary<Guid,float>(),hover=new Dictionary<Guid,float>();
     private readonly Dictionary<EditorPage,RectangleF> rectangles=new Dictionary<EditorPage,RectangleF>();
-    private EditorPage pressed;
+    private EditorPage pressed,hotPage;
     private Point press;
     private bool moving;
     private float offset;
+    private float Unit {get{return DeviceDpi/96f;}}
+    private float LogicalWidth {get{return Width/Unit;}}
     private int hovered=-1;
     private Image avatar;
     private DateTime profileStamp;
-    private string profileName="Conta";
+    private string profileName="Conta",lastTip="";
     private readonly ToolTip tip=new ToolTip();
-    internal WorkspaceStrip(SuiteHost h)
+    internal string ProfileName {get{return profileName;}}
+    internal Image Avatar {get{return avatar;}}
+    internal WorkspaceStrip(SuiteHost owner)
     {
-        host=h;DoubleBuffered=true;SetStyle(ControlStyles.ResizeRedraw,true);BackColor=Color.FromArgb(59,62,72);
-        animation.Tick+=(s,e)=>Invalidate();Disposed+=(s,e)=>{animation.Dispose();tip.Dispose();if(avatar!=null)avatar.Dispose();};AccessibleName="Páginas do AWcontrol";
+        host=owner;DoubleBuffered=true;SetStyle(ControlStyles.ResizeRedraw,true);BackColor=Color.FromArgb(36,37,43);
+        animation.Tick+=(s,e)=>Invalidate();Disposed+=(s,e)=>{animation.Dispose();tip.Dispose();if(avatar!=null)avatar.Dispose();};AccessibleName="Páginas do Wilson Control";
     }
     internal void RefreshProfile()
     {
         string path=System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),"AlimentosWilson","profile.json");
         try
         {
-            var info=new FileInfo(path);if(!info.Exists || info.LastWriteTimeUtc==profileStamp || info.Length>16*1024*1024)return;profileStamp=info.LastWriteTimeUtc;
+            var info=new FileInfo(path);if(!info.Exists||info.LastWriteTimeUtc==profileStamp||info.Length>16*1024*1024)return;profileStamp=info.LastWriteTimeUtc;
             var data=new JavaScriptSerializer{MaxJsonLength=16*1024*1024}.DeserializeObject(File.ReadAllText(path)) as Dictionary<string,object>;
             if(data==null)return;object value;if(data.TryGetValue("name",out value)&&value is string)profileName=(string)value;
-            Image next=null;
-            if(data.TryGetValue("photo",out value)){var pixels=value as object[];if(pixels!=null && pixels.Length>0 && pixels.Length<4*1024*1024){byte[] bytes=pixels.Select(Convert.ToByte).ToArray();using(var stream=new MemoryStream(bytes))using(var image=Image.FromStream(stream)){if(image.Width<=4096 && image.Height<=4096)next=new Bitmap(image);}}}
-            var previous=avatar;avatar=next;if(previous!=null)previous.Dispose();tip.SetToolTip(this,profileName);Invalidate();
-        }
-        catch(Exception e){if(!(e is IOException || e is UnauthorizedAccessException || e is ArgumentException || e is InvalidOperationException || e is FormatException || e is OverflowException))throw;}
+            Image next=null;if(data.TryGetValue("photo",out value)){var bytes=value as object[];if(bytes!=null&&bytes.Length>0&&bytes.Length<4*1024*1024){using(var stream=new MemoryStream(bytes.Select(Convert.ToByte).ToArray()))using(var image=Image.FromStream(stream)){if(image.Width<=4096&&image.Height<=4096)next=new Bitmap(image);}}}
+            var previous=avatar;avatar=next;if(previous!=null)previous.Dispose();Invalidate();
+        }catch(Exception e){if(!(e is IOException||e is UnauthorizedAccessException||e is ArgumentException||e is InvalidOperationException||e is FormatException||e is OverflowException))throw;}
     }
     internal void Animate(){animation.Start();Invalidate();}
     internal void EnsureVisible(EditorPage page)
-    {if(page!=null){int index=host.Pages.IndexOf(page);float available=Width-350;offset=Math.Max(0,Math.Min(offset,index*190));if((index+1)*190-offset>available)offset=(index+1)*190-available;}else offset=0;}
+    {
+        if(page==null){offset=0;return;}int index=host.Pages.IndexOf(page);float available=LogicalWidth-Start-Right;
+        offset=Math.Max(0,Math.Min(offset,index*TabWidth));if((index+1)*TabWidth-offset>available)offset=Math.Max(0,(index+1)*TabWidth-available);
+    }
     internal static GraphicsPath Round(RectangleF r,float radius)
     {var p=new GraphicsPath();float d=radius*2;p.AddArc(r.Left,r.Top,d,d,180,90);p.AddArc(r.Right-d,r.Top,d,d,270,90);p.AddArc(r.Right-d,r.Bottom-d,d,d,0,90);p.AddArc(r.Left,r.Bottom-d,d,d,90,90);p.CloseFigure();return p;}
     protected override void OnPaint(PaintEventArgs e)
     {
-        var g=e.Graphics;g.SmoothingMode=SmoothingMode.AntiAlias;rectangles.Clear();bool changing=false;
-        DrawPill(g,new RectangleF(4,4,112,28),SuiteHost.Red);g.DrawImage(SuiteHost.Brand,10,7,26,22);TextRenderer.DrawText(g,"AWcontrol",Font,new Rectangle(42,4,72,28),Color.White,TextFormatFlags.VerticalCenter|TextFormatFlags.NoPrefix);
-        var saved=g.Save();g.SetClip(new Rectangle(120,0,Math.Max(0,Width-120-222),Height));
+        var g=e.Graphics;g.SmoothingMode=SmoothingMode.AntiAlias;rectangles.Clear();bool changing=false;float h=Height/Unit;g.ScaleTransform(Unit,Unit);
+        using(var b=new LinearGradientBrush(new RectangleF(0,0,LogicalWidth,h),Color.FromArgb(47,48,54),Color.FromArgb(26,27,32),90))g.FillRectangle(b,0,0,LogicalWidth,h);
+        g.DrawImage(SuiteHost.Brand,16,(h-30)/2,49,30);WilsonHome.Text(g,"Wilson Control",new RectangleF(78,0,158,h),19,Color.White,true);
+        using(var p=new Pen(Color.FromArgb(90,140,139,140)))g.DrawLine(p,BrandWidth-12,12,BrandWidth-12,h-12);
+        var home=new RectangleF(BrandWidth,5,Start-BrandWidth-8,h-5);
+        if(host.ActivePage==null)Pill(g,home,Color.FromArgb(251,249,247));
+        WilsonHome.Icon(g,"home",new RectangleF(home.X+15,15,20,20),host.ActivePage==null?Color.FromArgb(112,23,34):Color.White);
+        WilsonHome.Text(g,"Início",new RectangleF(home.X+45,5,home.Width-50,h-5),16,host.ActivePage==null?Color.FromArgb(38,29,31):Color.White,true);
+        var state=g.Save();g.SetClip(new RectangleF(Start,0,Math.Max(0,LogicalWidth-Start-Right),h));
         for(int i=0;i<host.Pages.Count;i++)
         {
-            var p=host.Pages[i];float target=120+i*190-offset,current;
-            if(!positions.TryGetValue(p.Id,out current))current=target+20;
-            float next=SystemInformation.IsMenuAnimationEnabled?current+(target-current)*0.28f:target;if(Math.Abs(target-next)<0.4f)next=target;else changing=true;positions[p.Id]=next;
-            var r=new RectangleF(next+2,4,184,28);rectangles[p]=r;
-            bool active=host.ActivePage==p;
-            if(active)DrawPill(g,r,Color.FromArgb(249,249,250));
-            using(var b=new SolidBrush(p.App==0?SuiteHost.Red:SuiteHost.Gold))g.FillRectangle(b,r.Left+8,r.Top,168,2);
-            g.DrawImage(SuiteHost.Logos[p.App],r.Left+8,r.Top+6,16,16);
-            TextRenderer.DrawText(g,p.Title,Font,new Rectangle((int)r.Left+30,4,126,28),active?Color.FromArgb(40,40,44):Color.White,TextFormatFlags.EndEllipsis|TextFormatFlags.VerticalCenter|TextFormatFlags.NoPrefix);
-            using(var pen=new Pen(active?Color.FromArgb(50,50,55):Color.White,1)){float x=r.Right-12,y=r.Top+14;g.DrawLine(pen,x-3,y-3,x+3,y+3);g.DrawLine(pen,x-3,y+3,x+3,y-3);}
+            var page=host.Pages[i];float target=Start+i*TabWidth-offset,current;if(!positions.TryGetValue(page.Id,out current))current=target+14;
+            float next=host.AnimateUI?current+(target-current)*.27f:target;if(Math.Abs(target-next)<.4f)next=target;else changing=true;positions[page.Id]=next;
+            float old;hover.TryGetValue(page.Id,out old);float to=page==hotPage?1:0;float amount=host.AnimateUI?old+(to-old)*.24f:to;if(Math.Abs(amount-to)<.01f)amount=to;else changing=true;hover[page.Id]=amount;
+            var r=new RectangleF(next+2,6,TabWidth-8,h-6);rectangles[page]=r;bool active=host.ActivePage==page;
+            if(active)Pill(g,r,Color.FromArgb(251,249,247));else{Pill(g,r,Color.FromArgb(38+(int)(amount*26),39+(int)(amount*26),45+(int)(amount*26)));using(var path=Round(r,8))using(var pen=new Pen(Color.FromArgb(75+(int)(amount*80),120,120,125)))g.DrawPath(pen,path);}
+            using(var b=new SolidBrush(page.App==0?Color.FromArgb(182,41,49):Color.FromArgb(213,158,40)))g.FillRectangle(b,r.Left+10,r.Top, r.Width-20,2);
+            g.DrawImage(SuiteHost.Logos[page.App],r.Left+10,r.Top+11,20,20);
+            WilsonHome.Text(g,page.Title,new RectangleF(r.Left+38,r.Top,r.Width-68,r.Height),14,active?Color.FromArgb(43,32,34):Color.White);
+            if(page==hotPage)Pill(g,new RectangleF(r.Right-27,r.Top+10,21,23),Color.FromArgb(active?20:32,active?Color.Black:Color.White));
+            using(var pen=new Pen(active?Color.FromArgb(76,60,62):Color.FromArgb(224,219,220),1.2f)){float x=r.Right-16,y=r.Top+r.Height/2;g.DrawLine(pen,x-3,y-3,x+3,y+3);g.DrawLine(pen,x-3,y+3,x+3,y-3);}
         }
-        g.Restore(saved);
-        int plus=Width-222;using(var font=new Font(Font.FontFamily,16))TextRenderer.DrawText(g,"+",font,new Rectangle(plus,0,36,36),Color.White,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter);
-        var avatarRect=new Rectangle(Width-178,5,26,26);
-        if(avatar!=null){var state=g.Save();using(var path=new GraphicsPath()){path.AddEllipse(avatarRect);g.SetClip(path);g.DrawImage(avatar,avatarRect);}g.Restore(state);}
-        else {using(var b=new SolidBrush(SuiteHost.Red))g.FillEllipse(b,avatarRect);TextRenderer.DrawText(g,"AW",Font,avatarRect,Color.White,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter);}
+        g.Restore(state);
+        WilsonHome.Text(g,"+",new RectangleF(LogicalWidth-Right,0,36,h),25,Color.White,false,StringAlignment.Center);
+        var avatarRect=new RectangleF(LogicalWidth-178,(h-30)/2,30,30);
+        if(avatar!=null){var saved=g.Save();using(var path=new GraphicsPath()){path.AddEllipse(avatarRect);g.SetClip(path);g.DrawImage(avatar,avatarRect);}g.Restore(saved);}else{using(var b=new SolidBrush(SuiteHost.Red))g.FillEllipse(b,avatarRect);WilsonHome.Text(g,"AW",avatarRect,12,Color.White,true,StringAlignment.Center);}
         for(int i=0;i<3;i++)
-        {
-            var r=new Rectangle(Width-138+i*46,0,46,36);if(hovered==i)using(var b=new SolidBrush(i==2?Color.FromArgb(196,43,28):Color.FromArgb(82,85,96)))g.FillRectangle(b,r);
-            using(var pen=new Pen(Color.White,1))
-            {float x=r.Left+23,y=18;if(i==0)g.DrawLine(pen,x-5,y,x+5,y);else if(i==1)g.DrawRectangle(pen,x-5,y-5,10,10);else{g.DrawLine(pen,x-5,y-5,x+5,y+5);g.DrawLine(pen,x-5,y+5,x+5,y-5);}}
-        }
-        if(!changing)animation.Stop();
-        foreach(var id in positions.Keys.Where(id=>!host.Pages.Any(p=>p.Id==id)).ToArray())positions.Remove(id);
+        {var r=new RectangleF(LogicalWidth-138+i*46,0,46,h);if(hovered==i)using(var b=new SolidBrush(i==2?Color.FromArgb(196,43,28):Color.FromArgb(70,70,80)))g.FillRectangle(b,r);using(var pen=new Pen(Color.White,1)){float x=r.Left+23,y=h/2;if(i==0)g.DrawLine(pen,x-5,y,x+5,y);else if(i==1)g.DrawRectangle(pen,x-5,y-5,10,10);else{g.DrawLine(pen,x-5,y-5,x+5,y+5);g.DrawLine(pen,x-5,y+5,x+5,y-5);}}}
+        if(!changing)animation.Stop();foreach(var id in positions.Keys.Where(id=>!host.Pages.Any(p=>p.Id==id)).ToArray()){positions.Remove(id);hover.Remove(id);}
     }
-    private static void DrawPill(Graphics g,RectangleF r,Color color){using(var path=Round(r,7))using(var b=new SolidBrush(color))g.FillPath(b,path);}
-    protected override void OnMouseWheel(MouseEventArgs e){offset=Math.Max(0,Math.Min(Math.Max(0,host.Pages.Count*190-(Width-342)),offset-e.Delta));Animate();}
+    private static void Pill(Graphics g,RectangleF r,Color color){using(var path=Round(r,8))using(var b=new SolidBrush(color))g.FillPath(b,path);}
+    protected override void OnMouseWheel(MouseEventArgs e){offset=Math.Max(0,Math.Min(Math.Max(0,host.Pages.Count*TabWidth-(LogicalWidth-Start-Right)),offset-e.Delta));Animate();}
     protected override void OnMouseDown(MouseEventArgs e)
     {
-        base.OnMouseDown(e);if(e.Button!=MouseButtons.Left)return;
-        if(e.X>=Width-138)return;
-        pressed=rectangles.FirstOrDefault(p=>p.Value.Contains(e.Location)).Key;press=e.Location;moving=false;
-        if(pressed!=null){Capture=true;return;}
-        if(e.X>=120 && e.X<Width-222){Native.ReleaseCapture();Native.SendMessage(host.Handle,0xA1,new IntPtr(2),IntPtr.Zero);}
+        base.OnMouseDown(e);int x=(int)(e.X/Unit);var point=new PointF(e.X/Unit,e.Y/Unit);if(e.Button!=MouseButtons.Left||x>=LogicalWidth-Right)return;
+        pressed=rectangles.FirstOrDefault(p=>p.Value.Contains(new PointF(e.X/Unit,e.Y/Unit))).Key;press=new Point((int)(e.X/Unit),(int)(e.Y/Unit));moving=false;
+        if(pressed!=null){Capture=true;return;}if(x>=Start){Native.ReleaseCapture();Native.SendMessage(host.Handle,0xA1,new IntPtr(2),IntPtr.Zero);}
     }
     protected override void OnMouseMove(MouseEventArgs e)
     {
-        base.OnMouseMove(e);hovered=e.X>=Width-138?Math.Min(2,(e.X-(Width-138))/46):-1;
-        if(pressed!=null && Capture && (moving || Math.Abs(e.X-press.X)>6))
-        {moving=true;int index=Math.Max(0,Math.Min(host.Pages.Count-1,(int)((e.X-120+offset)/190)));if(host.Pages.IndexOf(pressed)!=index)host.Reorder(pressed,index);}
-        Invalidate();
+        base.OnMouseMove(e);float x=e.X/Unit;hovered=x>=LogicalWidth-138?Math.Min(2,(int)((x-(LogicalWidth-138))/46)):-1;hotPage=x>=Start&&x<LogicalWidth-Right?rectangles.FirstOrDefault(p=>p.Value.Contains(new PointF(e.X/Unit,e.Y/Unit))).Key:null;
+        if(pressed!=null&&Capture&&(moving||Math.Abs(x-press.X)>6)){moving=true;int index=Math.Max(0,Math.Min(host.Pages.Count-1,(int)((x-Start+offset)/TabWidth)));if(host.Pages.IndexOf(pressed)!=index)host.Reorder(pressed,index);}
+        string text=hotPage!=null?hotPage.Title:x>=LogicalWidth-182&&x<LogicalWidth-138?profileName:x>=LogicalWidth-Right&&x<LogicalWidth-182?"Novo documento ou planilha":"";if(text!=lastTip){lastTip=text;tip.SetToolTip(this,text);}Animate();
     }
-    protected override void OnMouseLeave(EventArgs e){hovered=-1;Invalidate();base.OnMouseLeave(e);}
+    protected override void OnMouseLeave(EventArgs e){hovered=-1;hotPage=null;Animate();base.OnMouseLeave(e);}
     protected override void OnMouseUp(MouseEventArgs e)
     {
-        base.OnMouseUp(e);Capture=false;if(e.Button!=MouseButtons.Left)return;
-        if(pressed!=null)
-        {var page=pressed;pressed=null;if(!moving){RectangleF r;if(rectangles.TryGetValue(page,out r) && e.X>r.Right-23)host.ClosePage(page);else host.SelectPage(page);}return;}
-        if(e.X<120){host.SelectPage(null);return;}
-        if(e.X>=Width-138){int kind=(e.X-(Width-138))/46;if(kind==0)host.WindowState=FormWindowState.Minimized;else if(kind==1)host.WindowState=host.WindowState==FormWindowState.Maximized?FormWindowState.Normal:FormWindowState.Maximized;else host.Close();return;}
-        if(e.X>=Width-182 && e.X<Width-138){host.SelectPage(null);return;}
-        if(e.X>=Width-222){var menu=new ContextMenuStrip();menu.Items.Add("Nova planilha",null,(s,a)=>host.OpenDocument(0,null));menu.Items.Add("Novo documento",null,(s,a)=>host.OpenDocument(1,null));menu.Closed+=(s,a)=>menu.Dispose();menu.Show(this,new Point(Width-222,Height));}
+        base.OnMouseUp(e);float x=e.X/Unit;Capture=false;if(e.Button!=MouseButtons.Left)return;
+        if(pressed!=null){var page=pressed;pressed=null;if(!moving){RectangleF r;if(rectangles.TryGetValue(page,out r)&&x>r.Right-27)host.ClosePage(page);else host.SelectPage(page);}return;}
+        if(x<Start){host.SelectPage(null);return;}
+        if(x>=LogicalWidth-138){int kind=(int)((x-(LogicalWidth-138))/46);if(kind==0)host.WindowState=FormWindowState.Minimized;else if(kind==1)host.WindowState=host.WindowState==FormWindowState.Maximized?FormWindowState.Normal:FormWindowState.Maximized;else host.Close();return;}
+        if(x>=LogicalWidth-182){host.SelectPage(null);host.Home.Navigate("profile");return;}
+        if(x>=LogicalWidth-Right){var menu=new ContextMenuStrip();menu.Items.Add("Nova planilha",null,(s,a)=>host.OpenDocument(0,null));menu.Items.Add("Novo documento",null,(s,a)=>host.OpenDocument(1,null));menu.Closed+=(s,a)=>menu.Dispose();menu.Show(this,new Point((int)((LogicalWidth-Right)*Unit),Height));}
     }
-    protected override void OnDoubleClick(EventArgs e){base.OnDoubleClick(e);var p=PointToClient(Cursor.Position);if(p.X>=120 && p.X<Width-222 && !rectangles.Any(r=>r.Value.Contains(p)))host.WindowState=host.WindowState==FormWindowState.Maximized?FormWindowState.Normal:FormWindowState.Maximized;}
+    protected override void OnDoubleClick(EventArgs e){base.OnDoubleClick(e);var physical=PointToClient(Cursor.Position);var p=new PointF(physical.X/Unit,physical.Y/Unit);if(p.X>=Start&&p.X<LogicalWidth-Right&&!rectangles.Any(r=>r.Value.Contains(p)))host.WindowState=host.WindowState==FormWindowState.Maximized?FormWindowState.Normal:FormWindowState.Maximized;}
 }
+
 
 internal sealed class WorkspaceBroker : IDisposable
 {
