@@ -255,7 +255,7 @@ internal sealed class SuiteHost : Form
         for(int a=0;a<2;a++)
         {
             int app=a;
-            var card=new Panel{Size=new Size(324,180),BackColor=Color.White,Margin=new Padding(0,0,20,20),Padding=new Padding(18)};
+            var card=new RoundedCard{Size=new Size(324,180),BackColor=Color.White,Margin=new Padding(0,0,20,20),Padding=new Padding(18)};
             card.Controls.Add(new PictureBox{Image=Logos[a],SizeMode=PictureBoxSizeMode.Zoom,Bounds=new Rectangle(18,18,48,48)});
             card.Controls.Add(new Label{Text=Distribution.Names[a],Font=new Font("Segoe UI",18,FontStyle.Bold),AutoSize=true,Location=new Point(80,20)});
             card.Controls.Add(new Label{Text=a==0?"Números, tabelas e ideias organizadas.":"Textos, relatórios e novas histórias.",AutoSize=true,Location=new Point(18,80),ForeColor=Color.DimGray});
@@ -273,9 +273,7 @@ internal sealed class SuiteHost : Form
     }
     private static Button HomeButton(string label,Color color)
     {
-        var b=new Button{Text=label,Size=new Size(224,42),Margin=new Padding(0,0,14,0),FlatStyle=FlatStyle.Flat,BackColor=color,ForeColor=Color.White,Cursor=Cursors.Hand};b.FlatAppearance.BorderSize=0;
-        using(var path=WorkspaceStrip.Round(new Rectangle(0,0,b.Width,b.Height),9))b.Region=new Region(path);
-        b.Resize+=(s,e)=>{using(var p=WorkspaceStrip.Round(new Rectangle(0,0,b.Width,b.Height),9)){var old=b.Region;b.Region=new Region(p);if(old!=null)old.Dispose();}};
+        var b=new RoundedButton{Text=label,Size=new Size(224,42),Margin=new Padding(0,0,14,0),FlatStyle=FlatStyle.Flat,BackColor=color,ForeColor=Color.White,Cursor=Cursors.Hand};b.FlatAppearance.BorderSize=0;
         return b;
     }
     private void ReadRecent()
@@ -301,6 +299,32 @@ internal sealed class SuiteHost : Form
             if(l||r||t||b)m.Result=new IntPtr(l?(t?13:b?16:10):r?(t?14:b?17:11):t?12:15);return;
         }
         base.WndProc(ref m);
+    }
+}
+
+internal sealed class RoundedCard : Panel
+{
+    protected override void OnPaintBackground(PaintEventArgs e)
+    {
+        e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;e.Graphics.Clear(Parent==null?Color.FromArgb(248,248,249):Parent.BackColor);
+        using(var path=WorkspaceStrip.Round(new RectangleF(0,0,Width-1,Height-1),12))using(var fill=new SolidBrush(Color.White))using(var stroke=new Pen(Color.FromArgb(230,230,234))) {e.Graphics.FillPath(fill,path);e.Graphics.DrawPath(stroke,path);}
+    }
+}
+internal sealed class RoundedButton : Button
+{
+    private bool hot,down;
+    internal RoundedButton(){SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.OptimizedDoubleBuffer,true);}
+    protected override void OnMouseEnter(EventArgs e){hot=true;Invalidate();base.OnMouseEnter(e);}
+    protected override void OnMouseLeave(EventArgs e){hot=false;down=false;Invalidate();base.OnMouseLeave(e);}
+    protected override void OnMouseDown(MouseEventArgs e){down=true;Invalidate();base.OnMouseDown(e);}
+    protected override void OnMouseUp(MouseEventArgs e){down=false;Invalidate();base.OnMouseUp(e);}
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g=e.Graphics;g.SmoothingMode=SmoothingMode.AntiAlias;g.Clear(Parent==null?Color.White:Parent.BackColor);
+        Color color=Enabled?BackColor:Color.Gray;if(hot)color=ControlPaint.Light(color,down?-0.1f:0.1f);
+        using(var path=WorkspaceStrip.Round(new RectangleF(0,0,Width-1,Height-1),9))using(var brush=new SolidBrush(color))g.FillPath(brush,path);
+        TextRenderer.DrawText(g,Text,Font,ClientRectangle,ForeColor,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter|TextFormatFlags.NoPrefix);
+        if(Focused && ShowFocusCues)ControlPaint.DrawFocusRectangle(g,Rectangle.Inflate(ClientRectangle,-6,-6),ForeColor,color);
     }
 }
 

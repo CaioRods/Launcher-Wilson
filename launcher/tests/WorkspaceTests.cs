@@ -39,7 +39,7 @@ internal static class WorkspaceTests
             using(var broker=new WorkspaceBroker(host))
             using(var timer=new Timer { Interval=100 })
             {
-                host.Size=new Size(1200,780);
+                host.StartPosition=FormStartPosition.Manual;host.Location=Point.Empty;host.Size=new Size(1000,700);
                 timer.Tick+=(s,e)=>
                 {
                     try
@@ -121,6 +121,6 @@ internal static class WorkspaceTests
     private static void Capture(Form form,string name)
     {
         string folder=Environment.GetEnvironmentVariable("AWCONTROL_TEST_SCREENSHOTS");if(string.IsNullOrEmpty(folder))return;Directory.CreateDirectory(folder);
-        using(var image=new Bitmap(form.ClientSize.Width,form.ClientSize.Height)){form.DrawToBitmap(image,new Rectangle(Point.Empty,image.Size));image.Save(Path.Combine(folder,name+".png"));}
+        using(var image=new Bitmap(form.ClientSize.Width,form.ClientSize.Height)){using(var g=Graphics.FromImage(image))g.CopyFromScreen(form.PointToScreen(Point.Empty),Point.Empty,image.Size);image.Save(Path.Combine(folder,name+".png"));}
     }
 }
