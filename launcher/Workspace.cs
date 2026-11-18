@@ -190,7 +190,7 @@ internal sealed class SuiteHost : Form
         if(page.Window!=IntPtr.Zero) {Native.PostMessage(page.Window,0x0010,IntPtr.Zero,IntPtr.Zero);status.Text="Fechando página. Confirme o salvamento no editor, se solicitado."; }
     }
     internal void Reorder(EditorPage page, int index)
-    { if(index<0 || index>=Pages.Count)return;Pages.Remove(page);Pages.Insert(index,page);strip.Animate(); }
+    { if(index<0 || index>=Pages.Count)return;Pages.Remove(page);Pages.Insert(index,page);strip.EnsureVisible(ActivePage);strip.Animate(); }
     private void ResizeEditors()
     {
         foreach(var p in Pages)if(p.Window!=IntPtr.Zero && !p.Attaching && !p.Process.HasExited)
