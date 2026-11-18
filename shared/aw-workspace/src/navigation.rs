@@ -4,8 +4,27 @@ use egui::{Align2, Color32, FontId, Painter, Rect, Response, Sense, Stroke, Ui, 
 pub const WIDTH: f32 = 196.0;
 
 pub fn background(ui: &Ui, rect: Rect, dark: bool) {
+    background_palette(ui, rect, dark, false);
+}
+
+/// Word retains gold as its primary colour; Excel retains red.
+pub fn background_palette(ui: &Ui, rect: Rect, dark: bool, gold: bool) {
     // Nearly opaque tinted glass keeps white labels readable without flattening the gradient.
-    let stops = if dark {
+    let stops = if gold {
+        if dark {
+            [
+                Color32::from_rgba_unmultiplied(103, 75, 23, 246),
+                Color32::from_rgba_unmultiplied(71, 47, 26, 242),
+                Color32::from_rgba_unmultiplied(49, 26, 28, 250),
+            ]
+        } else {
+            [
+                Color32::from_rgba_unmultiplied(169, 118, 15, 246),
+                Color32::from_rgba_unmultiplied(137, 85, 15, 242),
+                Color32::from_rgba_unmultiplied(103, 38, 36, 250),
+            ]
+        }
+    } else if dark {
         [
             Color32::from_rgba_unmultiplied(104, 57, 64, 246),
             Color32::from_rgba_unmultiplied(66, 37, 49, 242),

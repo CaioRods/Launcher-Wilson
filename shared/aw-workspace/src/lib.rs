@@ -5,3 +5,7 @@
 pub mod document_strip;
 pub mod navigation;
 pub mod profile;
+
+#[cfg(not(target_arch = "wasm32"))]
+pub mod control;
+pub mod window_frame;
