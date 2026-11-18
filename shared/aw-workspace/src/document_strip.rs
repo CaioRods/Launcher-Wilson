@@ -16,13 +16,24 @@ pub struct Style {
     pub active: Color32,
     pub text: Color32,
     pub on_accent: Color32,
+    /// Reserved width for the host avatar and native window controls.
+    pub trailing_width: f32,
+    pub logo: Option<egui::TextureId>,
 }
 
 pub fn show(ui: &mut Ui, entries: &[(u64, String, bool)], accent: Color32, portuguese: bool) -> Option<Action> {
     show_with_style(
         ui,
         entries,
-        Style { brand: "AW", accent, active: Color32::WHITE, text: Color32::from_gray(35), on_accent: Color32::WHITE },
+        Style {
+            brand: "AW",
+            accent,
+            active: Color32::WHITE,
+            text: Color32::from_gray(35),
+            on_accent: Color32::WHITE,
+            trailing_width: 44.0,
+            logo: None,
+        },
         portuguese,
         |_| {},
     )
@@ -52,54 +63,83 @@ pub fn show_with_style(ui: &mut Ui, entries: &[(u64, String, bool)], style: Styl
             let maximized = ui.input(|i| i.viewport().maximized.unwrap_or(false));
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Maximized(!maximized));
         }
-        ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
-        ui.horizontal(|ui| {
-            let (brand, response) = ui.allocate_exact_size(vec2(110.0, 32.0), Sense::click());
-            ui.painter().rect_filled(brand, 0.0, style.accent);
-            ui.painter().text(brand.center(), egui::Align2::CENTER_CENTER, style.brand, FontId::proportional(12.5), style.on_accent);
-            response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, style.brand));
-            if response.clicked() {
-                action = Some(Action::Home);
-            }
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.add_space(8.0);
-                right(ui);
-                ui.add_space(8.0);
-                let width = ui.available_width();
-                ui.allocate_ui_with_layout(vec2(width, 32.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                    egui::ScrollArea::horizontal().id_salt("aw_document_scroll").max_height(32.0).auto_shrink([false, true]).show(ui, |ui| {
-                        ui.horizontal(|ui| {
-                            for id in &order {
-                                let Some((_, title, active)) = entries.iter().find(|entry| entry.0 == *id) else { continue };
-                                ui.push_id(id, |ui| {
-                                    let color = if *active { style.text } else { Color32::from_gray(230) };
-                                    let mut job = egui::text::LayoutJob::simple_singleline(
-                                        title.chars().take(160).collect(),
-                                        FontId::proportional(12.0),
-                                        color,
+        let bar_rect = ui.max_rect();
+        let brand = Rect::from_min_size(bar_rect.min, vec2(110.0_f32.min(bar_rect.width()), 32.0));
+        ui.painter().rect_filled(brand.shrink2(vec2(4.0, 3.0)), 7, style.accent);
+        ui.painter().text(
+            if style.logo.is_some() { pos2(brand.left() + 38.0, brand.center().y) } else { brand.center() },
+            if style.logo.is_some() { egui::Align2::LEFT_CENTER } else { egui::Align2::CENTER_CENTER },
+            style.brand,
+            FontId::proportional(12.5),
+            style.on_accent,
+        );
+        if let Some(logo) = style.logo {
+            ui.painter().image(
+                logo,
+                Rect::from_center_size(pos2(brand.left() + 20.0, brand.center().y), vec2(22.0, 22.0)),
+                Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+                Color32::WHITE,
+            );
+        }
+        let response = ui.interact(brand, ui.scope_id().with("brand"), Sense::click());
+        response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, style.brand));
+        if response.clicked() {
+            action = Some(Action::Home);
+        }
+        let trailing = style.trailing_width.clamp(0.0, (bar_rect.width() - brand.width()).max(0.0));
+        let right_rect = Rect::from_min_max(pos2(bar_rect.right() - trailing, bar_rect.top()), bar_rect.right_bottom());
+        ui.scope_builder(egui::UiBuilder::new().max_rect(right_rect).layout(egui::Layout::right_to_left(egui::Align::Center)), |ui| {
+            ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
+            ui.add_space(8.0);
+            right(ui);
+        });
+        let tabs_rect = Rect::from_min_max(brand.right_top(), right_rect.left_bottom());
+        ui.scope_builder(egui::UiBuilder::new().max_rect(tabs_rect).layout(egui::Layout::top_down(egui::Align::Min)), |ui| {
+            ui.set_clip_rect(ui.clip_rect().intersect(tabs_rect));
+            ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
+            egui::ScrollArea::horizontal()
+                .id_salt("aw_document_scroll")
+                .max_height(32.0)
+                .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    ui.horizontal_top(|ui| {
+                        for id in &order {
+                            let Some((_, title, active)) = entries.iter().find(|entry| entry.0 == *id) else { continue };
+                            ui.push_id(id, |ui| {
+                                let color = if *active { style.text } else { Color32::from_gray(230) };
+                                let mut job =
+                                    egui::text::LayoutJob::simple_singleline(title.chars().take(160).collect(), FontId::proportional(12.0), color);
+                                job.wrap = egui::text::TextWrapping::truncate_at_width(210.0);
+                                let text = ui.painter().layout_job(job);
+                                let width = (text.size().x + 56.0).clamp(150.0, 270.0);
+                                let (tab, _) = ui.allocate_exact_size(vec2(width, 32.0), Sense::hover());
+                                let duration = if ui.style().animation_time > 0.0 { 0.12 } else { 0.0 };
+                                let x = ui.ctx().animate_value_with_time(ui.scope_id().with("position"), tab.left(), duration);
+                                let tab = tab.translate(vec2(x - tab.left(), 0.0));
+                                let close_rect = Rect::from_center_size(pos2(tab.right() - 13.0, tab.center().y), vec2(22.0, 24.0));
+                                let body = Rect::from_min_max(tab.min, pos2(close_rect.left() - 2.0, tab.bottom()));
+                                let response = ui
+                                    .interact(body, ui.scope_id().with("document"), Sense::click_and_drag())
+                                    .on_hover_text(title)
+                                    .on_hover_cursor(egui::CursorIcon::Grab);
+                                let fill = if *active {
+                                    style.active
+                                } else if response.hovered() {
+                                    Color32::from_rgb(80, 84, 94)
+                                } else {
+                                    bar
+                                };
+                                ui.painter().rect_filled(tab.shrink2(vec2(2.0, 3.0)), 7, fill);
+                                let icon = Rect::from_center_size(pos2(tab.left() + 14.0, tab.center().y), vec2(10.0, 13.0));
+                                if let Some(logo) = style.logo {
+                                    ui.painter().image(
+                                        logo,
+                                        Rect::from_center_size(icon.center(), vec2(16.0, 16.0)),
+                                        Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+                                        Color32::WHITE,
                                     );
-                                    job.wrap = egui::text::TextWrapping::truncate_at_width(210.0);
-                                    let text = ui.painter().layout_job(job);
-                                    let width = (text.size().x + 56.0).clamp(150.0, 270.0);
-                                    let (tab, _) = ui.allocate_exact_size(vec2(width, 32.0), Sense::hover());
-                                    let close_rect = Rect::from_center_size(pos2(tab.right() - 13.0, tab.center().y), vec2(22.0, 24.0));
-                                    let body = Rect::from_min_max(tab.min, pos2(close_rect.left() - 2.0, tab.bottom()));
-                                    let response = ui
-                                        .interact(body, ui.scope_id().with("document"), Sense::click_and_drag())
-                                        .on_hover_text(title)
-                                        .on_hover_cursor(egui::CursorIcon::Grab);
-                                    let fill = if *active {
-                                        style.active
-                                    } else if response.hovered() {
-                                        Color32::from_rgb(80, 84, 94)
-                                    } else {
-                                        bar
-                                    };
-                                    ui.painter().rect_filled(tab, egui::CornerRadius { nw: 4, ne: 4, sw: 0, se: 0 }, fill);
-                                    if *active {
-                                        ui.painter().rect_filled(Rect::from_min_size(tab.min, vec2(tab.width(), 2.0)), 0.0, style.accent);
-                                    }
-                                    let icon = Rect::from_center_size(pos2(tab.left() + 14.0, tab.center().y), vec2(10.0, 13.0));
+                                } else {
                                     ui.painter().rect_stroke(
                                         icon,
                                         1.0,
@@ -110,41 +150,40 @@ pub fn show_with_style(ui: &mut Ui, entries: &[(u64, String, bool)], style: Styl
                                         [icon.left_top() + vec2(2.0, 4.0), icon.right_top() + vec2(-2.0, 4.0)],
                                         Stroke::new(1.0, color),
                                     );
-                                    ui.painter().galley(pos2(tab.left() + 26.0, tab.center().y - text.size().y / 2.0), text, color);
-                                    response.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, true, *active, title));
-                                    if response.clicked() {
-                                        action = Some(Action::Select(*id));
-                                    }
-                                    if response.drag_started() {
-                                        ui.ctx().data_mut(|data| data.insert_temp(drag_id, *id));
-                                    }
-                                    if response.contains_pointer() && ui.input(|input| input.pointer.any_released()) {
-                                        dropped = ui.ctx().data_mut(|data| data.get_temp::<u64>(drag_id)).map(|from| (from, *id));
-                                    }
-                                    let response = ui
-                                        .interact(close_rect, ui.scope_id().with("close"), Sense::click())
-                                        .on_hover_text(close)
-                                        .on_hover_cursor(egui::CursorIcon::PointingHand);
-                                    if response.hovered() {
-                                        ui.painter().rect_filled(close_rect.shrink(2.0), 3.0, Color32::from_white_alpha(35));
-                                    }
-                                    ui.painter().text(close_rect.center(), egui::Align2::CENTER_CENTER, "×", FontId::proportional(16.0), color);
-                                    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, format!("{close}: {title}")));
-                                    if response.clicked() {
-                                        action = Some(Action::Close(*id));
-                                    }
-                                });
-                            }
-                            let (rect, response) = ui.allocate_exact_size(vec2(34.0, 32.0), Sense::click());
-                            ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "+", FontId::proportional(22.0), Color32::from_gray(230));
-                            response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, new));
-                            if response.on_hover_text(new).clicked() {
-                                action = Some(Action::New);
-                            }
-                        });
+                                }
+                                ui.painter().galley(pos2(tab.left() + 26.0, tab.center().y - text.size().y / 2.0), text, color);
+                                response.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, true, *active, title));
+                                if response.clicked() {
+                                    action = Some(Action::Select(*id));
+                                }
+                                if response.drag_started() {
+                                    ui.ctx().data_mut(|data| data.insert_temp(drag_id, *id));
+                                }
+                                if response.contains_pointer() && ui.input(|input| input.pointer.any_released()) {
+                                    dropped = ui.ctx().data_mut(|data| data.get_temp::<u64>(drag_id)).map(|from| (from, *id));
+                                }
+                                let response = ui
+                                    .interact(close_rect, ui.scope_id().with("close"), Sense::click())
+                                    .on_hover_text(close)
+                                    .on_hover_cursor(egui::CursorIcon::PointingHand);
+                                if response.hovered() {
+                                    ui.painter().rect_filled(close_rect.shrink(2.0), 3.0, Color32::from_white_alpha(35));
+                                }
+                                ui.painter().text(close_rect.center(), egui::Align2::CENTER_CENTER, "×", FontId::proportional(16.0), color);
+                                response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, format!("{close}: {title}")));
+                                if response.clicked() {
+                                    action = Some(Action::Close(*id));
+                                }
+                            });
+                        }
+                        let (rect, response) = ui.allocate_exact_size(vec2(34.0, 32.0), Sense::click());
+                        ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "+", FontId::proportional(22.0), Color32::from_gray(230));
+                        response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, new));
+                        if response.on_hover_text(new).clicked() {
+                            action = Some(Action::New);
+                        }
                     });
                 });
-            });
         });
     });
     if let Some(dragged) = ui.ctx().data_mut(|data| data.get_temp::<u64>(drag_id))
@@ -177,6 +216,20 @@ fn reorder(order: &mut Vec<u64>, from: u64, to: u64) {
         order.remove(a);
         order.insert(b.min(order.len()), from);
     }
+}
+
+/// Caches one of the host's embedded, attributed PNG app marks.
+pub fn logo(ctx: &egui::Context, name: &'static str, png: &[u8]) -> Option<egui::TextureId> {
+    let id = Id::unique(("aw_app_logo", name));
+    if let Some(texture) = ctx.data_mut(|data| data.get_temp::<egui::TextureHandle>(id)) {
+        return Some(texture.id());
+    }
+    let image = image::load_from_memory_with_format(png, image::ImageFormat::Png).ok()?.into_rgba8();
+    let pixels = egui::ColorImage::from_rgba_unmultiplied([image.width() as usize, image.height() as usize], image.as_raw());
+    let texture = ctx.load_texture(name, pixels, egui::TextureOptions::LINEAR);
+    let texture_id = texture.id();
+    ctx.data_mut(|data| data.insert_temp(id, texture));
+    Some(texture_id)
 }
 
 #[cfg(test)]
@@ -230,7 +283,21 @@ mod tests {
         let (_, shapes) = frame(&ctx, &[(1, "First".into(), true)], vec![]);
         let title = text_at(&shapes, "First");
         assert!(title.y < 32.0);
-        assert!(shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::Rect(rect) if rect.fill == egui::Color32::WHITE && rect.rect.contains(title) && rect.rect.height() == 32.0)));
+        assert!(shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::Rect(rect) if rect.fill == egui::Color32::WHITE && rect.rect.contains(title) && rect.rect.height() == 26.0)));
+    }
+
+    #[test]
+    fn tabs_and_plus_align_with_brand_with_tall_host_controls() {
+        let ctx = egui::Context::default();
+        ctx.all_styles_mut(|style| style.spacing.interact_size.y = 48.0);
+        for entries in [vec![], vec![(1, "First".into(), true)], (0..12).map(|id| (id, format!("Document {id}"), id == 0)).collect()] {
+            let (_, shapes) = frame(&ctx, &entries, vec![]);
+            assert!((text_at(&shapes, "AW").y - 16.0).abs() < 0.1);
+            assert!((text_at(&shapes, "+").y - 16.0).abs() < 0.1);
+            if entries.len() == 1 {
+                assert!((text_at(&shapes, "First").y - 16.0).abs() < 0.1);
+            }
+        }
     }
 
     #[test]

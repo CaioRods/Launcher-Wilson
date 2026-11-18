@@ -3,4 +3,5 @@
 #![forbid(unsafe_code)]
 
 pub mod document_strip;
+pub mod navigation;
 pub mod profile;
