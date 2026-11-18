@@ -48,14 +48,14 @@ internal static class WorkspaceTests
                         if(phase==6 && since.ElapsedMilliseconds>2000){Console.WriteLine("Closing: "+host.CloseStatus);since.Restart();}
                         if(phase==0)
                         {
-                            Capture(host,real?"real-home":"home");host.OpenDocument(0,null);host.OpenDocument(1,word);all.AddRange(host.Pages.Select(p=>p.Process));first=host.Pages[0];second=host.Pages[1];phase=1;return;
+                            Console.WriteLine("Opening editor processes");Capture(host,real?"real-home":"home");host.OpenDocument(0,null);host.OpenDocument(1,word);all.AddRange(host.Pages.Select(p=>p.Process));first=host.Pages[0];second=host.Pages[1];phase=1;Console.WriteLine("Waiting for native editor windows");return;
                         }
                         if(phase==1 && host.Pages.Count==2 && host.Pages.All(p=>p.Window!=IntPtr.Zero))
                         {
                             Require(host.Pages.All(p=>Native.GetParent(p.Window)==host.Stage.Handle),"editor must be a real child of the workspace");
-                            host.SelectPage(first);Require(Native.IsWindowVisible(first.Window)&&!Native.IsWindowVisible(second.Window),"tab switching must show only the selected editor");
-                            host.SelectPage(null);Require(!Native.IsWindowVisible(first.Window)&&!Native.IsWindowVisible(second.Window),"Home must hide both editors");
-                            host.SelectPage(second);host.Size=new Size(1040,680);host.Reorder(second,0);Require(host.Pages[0]==second,"drag order must retain page identity");phase=2;since.Restart();return;
+                            host.SelectPage(first);Eventually(()=>Native.IsWindowVisible(first.Window)&&!Native.IsWindowVisible(second.Window),"tab switching must show only the selected editor");
+                            host.SelectPage(null);Eventually(()=>!Native.IsWindowVisible(first.Window)&&!Native.IsWindowVisible(second.Window),"Home must hide both editors");
+                            host.SelectPage(second);host.Size=new Size(1040,680);host.Reorder(second,0);Require(host.Pages[0]==second,"drag order must retain page identity");phase=2;Console.WriteLine("Both editors attached and switched");since.Restart();return;
                         }
                         if(phase==2 && since.ElapsedMilliseconds>500)
                         {
@@ -65,13 +65,13 @@ internal static class WorkspaceTests
                         if(phase==3 && since.ElapsedMilliseconds>600)
                         {
                             if(!real){Require(!second.Process.HasExited,"Cancel must keep the editor and its document alive");File.Delete(word+".keep");host.ClosePage(second);}
-                            phase=4;return;
+                            phase=4;Console.WriteLine("Closing initial Word page");return;
                         }
                         if(phase==4 && host.Pages.Count==1)
                         {
                             // Same path through the live broker as a second AWcontrol invocation.
                             var send=Task.Run(()=>WorkspaceBroker.Forward(new[]{excel,word}));
-                            send.ContinueWith(t=>{if(!t.Result)failure="broker did not acknowledge forwarded files";});phase=5;return;
+                            send.ContinueWith(t=>{if(!t.Result)failure="broker did not acknowledge forwarded files";});phase=5;Console.WriteLine("Forwarding two files");return;
                         }
                         if(phase==5 && host.Pages.Count==3 && host.Pages.All(p=>p.Window!=IntPtr.Zero))
                         {
@@ -88,7 +88,7 @@ internal static class WorkspaceTests
                                 using(var forwarded=Process.Start(new ProcessStartInfo(exe,SuiteHost.Quote(excel)){UseShellExecute=false}))
                                     Require(forwarded.WaitForExit(5000)&&forwarded.ExitCode==0,"standalone Excel must hand an existing file to AWcontrol and exit");
                             }
-                            Capture(host,real?"real-files":"files");phase=6;host.Close();return;
+                            Capture(host,real?"real-files":"files");phase=6;Console.WriteLine("Closing suite");host.Close();return;
                         }
                         if(phase==6 && host.IsDisposed)timer.Stop();
                     }
@@ -117,6 +117,7 @@ internal static class WorkspaceTests
             finally{if(!p.HasExited)p.Kill();}
         }
     }
+    private static void Eventually(Func<bool> valid,string error){var time=Stopwatch.StartNew();while(!valid()&&time.ElapsedMilliseconds<1500)System.Threading.Thread.Sleep(10);Require(valid(),error);}
     private static void Require(bool valid,string error){if(!valid)throw new Exception(error);}
     private static void Capture(Form form,string name)
     {

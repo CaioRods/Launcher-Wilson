@@ -76,7 +76,7 @@ internal sealed class SuiteHost : Form
         Stage.Resize += (s,e) => ResizeEditors();
         poll.Tick += (s,e) => { TickEditors(); strip.RefreshProfile(); };
         poll.Start();
-        movement.Tick+=(s,e)=>{if(ActivePage==null || ActivePage.Window==IntPtr.Zero || transition.ElapsedMilliseconds>=150){movement.Stop();ResizeEditors();return;}float t=(float)transition.ElapsedMilliseconds/150;int x=(int)(12*Math.Pow(1-t,3));Native.MoveWindow(ActivePage.Window,x,0,Stage.ClientSize.Width,Stage.ClientSize.Height,true);};
+        movement.Tick+=(s,e)=>{if(ActivePage==null || ActivePage.Window==IntPtr.Zero || transition.ElapsedMilliseconds>=150){movement.Stop();ResizeEditors();return;}float t=(float)transition.ElapsedMilliseconds/150;int x=(int)(12*Math.Pow(1-t,3));Native.Resize(ActivePage.Window,x,0,Stage.ClientSize.Width,Stage.ClientSize.Height);};
         Shown += (s,e) => { MaximizedBounds=Screen.FromHandle(Handle).WorkingArea; };
         FormClosing += ClosingWorkspace;
         FormClosed += (s,e) => { poll.Dispose(); movement.Dispose(); if(broker!=null) broker.Dispose(); foreach(var p in Pages) p.Process.Dispose(); };
@@ -166,7 +166,7 @@ internal sealed class SuiteHost : Form
     {
         closeAll=false;
         ActivePage=page;
-        foreach(var p in Pages) if(p.Window!=IntPtr.Zero) Native.ShowWindow(p.Window,p==page?5:0);
+        foreach(var p in Pages) if(p.Window!=IntPtr.Zero) Native.ShowWindowAsync(p.Window,p==page?5:0);
         home.Visible=page==null;
         if(page==null)home.BringToFront();
         else if(page.Window!=IntPtr.Zero){ Native.FocusEditor(page.Window);status.Text=page.Title; }
@@ -185,7 +185,7 @@ internal sealed class SuiteHost : Form
     private void ResizeEditors()
     {
         foreach(var p in Pages)if(p.Window!=IntPtr.Zero && !p.Process.HasExited)
-            Native.MoveWindow(p.Window,0,0,Stage.ClientSize.Width,Stage.ClientSize.Height,true);
+            Native.Resize(p.Window,0,0,Stage.ClientSize.Width,Stage.ClientSize.Height);
     }
     private void TickEditors()
     {
@@ -200,15 +200,18 @@ internal sealed class SuiteHost : Form
             if(p.Window==IntPtr.Zero)
             {
                 IntPtr window=Native.FindWindow(p.Process.Id);
-                if(window!=IntPtr.Zero)
+                if(window!=IntPtr.Zero && Native.Responsive(window))
                 {
+                    if(Testing)Console.WriteLine("Attaching editor "+p.App+": "+p.Title);
                     long style=Native.GetWindowLongPtr(window,-16).ToInt64();
                     Native.SetWindowLongPtr(window,-16,new IntPtr((style & ~0x80CF0000L) | 0x46000000L)); // child, clip siblings
+                    if(Testing)Console.WriteLine("Applying parent for editor "+p.App);
                     Native.SetParent(window,Stage.Handle);
                     if(Native.GetParent(window)!=Stage.Handle) { status.Text="Não foi possível integrar a página. Feche o app e tente novamente.";continue; }
                     long ex=Native.GetWindowLongPtr(window,-20).ToInt64();Native.SetWindowLongPtr(window,-20,new IntPtr(ex & ~0x00040000L));
-                    p.Window=window;Native.SetWindowPos(window,IntPtr.Zero,0,0,Stage.ClientSize.Width,Stage.ClientSize.Height,0x0034);
-                    Native.ShowWindow(window,p==ActivePage?5:0);ResizeEditors();
+                    if(Testing)Console.WriteLine("Parent attached for editor "+p.App);
+                    p.Window=window;Native.SetWindowPos(window,IntPtr.Zero,0,0,Stage.ClientSize.Width,Stage.ClientSize.Height,0x4034);
+                    Native.ShowWindowAsync(window,p==ActivePage?5:0);ResizeEditors();
                     if(p==ActivePage)Native.FocusEditor(window);
                     if(p.CloseSent)Native.PostMessage(window,0x0010,IntPtr.Zero,IntPtr.Zero);
                     status.Text=p.Title;
@@ -519,7 +522,7 @@ internal static class Native
     [DllImport("user32.dll",EntryPoint="SetWindowLongPtrW")] internal static extern IntPtr SetWindowLongPtr(IntPtr h,int index,IntPtr value);
     [DllImport("user32.dll")] internal static extern IntPtr SetParent(IntPtr child,IntPtr parent);
     [DllImport("user32.dll")] internal static extern IntPtr GetParent(IntPtr h);
-    [DllImport("user32.dll")] internal static extern bool ShowWindow(IntPtr h,int command);
+    [DllImport("user32.dll")] internal static extern bool ShowWindowAsync(IntPtr h,int command);
     [DllImport("user32.dll")] internal static extern bool MoveWindow(IntPtr h,int x,int y,int width,int height,bool redraw);
     [DllImport("user32.dll")] internal static extern bool SetWindowPos(IntPtr h,IntPtr after,int x,int y,int width,int height,uint flags);
     [DllImport("user32.dll")] internal static extern bool PostMessage(IntPtr h,uint message,IntPtr w,IntPtr l);
@@ -527,13 +530,10 @@ internal static class Native
     [DllImport("user32.dll")] internal static extern bool ReleaseCapture();
     [DllImport("user32.dll")] internal static extern IntPtr SetFocus(IntPtr h);
     [DllImport("user32.dll")] internal static extern bool SetForegroundWindow(IntPtr h);
-    [DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
-    [DllImport("user32.dll")] private static extern bool AttachThreadInput(uint current,uint target,bool attach);
-    internal static void FocusEditor(IntPtr window)
-    {
-        uint pid;uint target=GetWindowThreadProcessId(window,out pid),current=GetCurrentThreadId();bool attached=current!=target&&AttachThreadInput(current,target,true);
-        try{SetFocus(window);}finally{if(attached)AttachThreadInput(current,target,false);}
-    }
+    [DllImport("user32.dll",SetLastError=true)] private static extern IntPtr SendMessageTimeout(IntPtr h,uint message,IntPtr w,IntPtr l,uint flags,uint timeout,out IntPtr result);
+    internal static bool Responsive(IntPtr window){IntPtr result;return SendMessageTimeout(window,0,IntPtr.Zero,IntPtr.Zero,2,50,out result)!=IntPtr.Zero;}
+    internal static void Resize(IntPtr window,int x,int y,int width,int height){SetWindowPos(window,IntPtr.Zero,x,y,width,height,0x4014);}
+    internal static void FocusEditor(IntPtr window){if(Responsive(window))SetFocus(window);}
     internal static IntPtr FindWindow(int process)
     {
         IntPtr found=IntPtr.Zero;EnumWindows((h,p)=>{uint pid;GetWindowThreadProcessId(h,out pid);if(pid==process && GetWindow(h,4)==IntPtr.Zero){var text=new StringBuilder(512);GetWindowText(h,text,512);var kind=new StringBuilder(256);GetClassName(h,kind,kind.Capacity);string name=kind.ToString();if(text.Length>0 && (name=="Window Class" || name.StartsWith("WindowsForms10.Window.",StringComparison.Ordinal))){found=h;return false;}}return true;},IntPtr.Zero);return found;
