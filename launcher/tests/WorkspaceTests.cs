@@ -62,10 +62,11 @@ internal static class WorkspaceTests
                         {
                             Native.RECT bounds;Native.GetClientRect(second.Window,out bounds);Require(bounds.Right==host.Stage.ClientSize.Width && bounds.Bottom==host.Stage.ClientSize.Height,"embedded editor must follow workspace resizing");
                             Capture(host,real?"real-mixed-tabs":"mixed-tabs");
-                            if(real){Native.SetForegroundWindow(host.Handle);Native.FocusEditor(second.Window);KeyboardTest.TypeOnPage(second.Window,"AWCONTROLETESTE");phase=20;since.Restart();return;}
+                            if(real){Native.SetForegroundWindow(host.Handle);Native.FocusEditor(second.Window);KeyboardTest.ClickOnPage(second.Window);phase=19;since.Restart();return;}
                             host.ClosePage(second);phase=3;since.Restart();return;
                         }
-                        if(phase==20 && since.ElapsedMilliseconds>600){KeyboardTest.Shortcut(0x41);KeyboardTest.Shortcut(0x43);phase=21;since.Restart();return;}
+                        if(phase==19 && since.ElapsedMilliseconds>500){KeyboardTest.Type("AWCONTROLETESTE");phase=20;since.Restart();return;}
+                        if(phase==20 && since.ElapsedMilliseconds>600){Capture(host,"real-word-after-typing");KeyboardTest.Shortcut(0x41);KeyboardTest.Shortcut(0x43);phase=21;since.Restart();return;}
                         if(phase==21 && since.ElapsedMilliseconds>500)
                         {
                             string copied="";try{copied=Clipboard.GetText();}catch(System.Runtime.InteropServices.ExternalException){}
@@ -189,12 +190,12 @@ internal static class KeyboardTest
     [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)] private struct MouseInput {internal int X,Y;internal uint Data,Flags,Time;internal IntPtr Extra;}
     [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern uint SendInput(uint count,Input[] input,int size);
     [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool SetCursorPos(int x,int y);
-    internal static void TypeOnPage(IntPtr window,string text)
+    internal static void ClickOnPage(IntPtr window)
     {
         Clipboard.Clear();var p=new Native.POINT{X=220,Y=310};Native.ClientToScreen(window,ref p);SetCursorPos(p.X,p.Y);
         Send(new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=2}}},new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=4}}});
-        var list=new System.Collections.Generic.List<Input>();foreach(char c in text){list.Add(new Input{Type=1,Value=new Data{Key=new KeysInput{Scan=c,Flags=4}}});list.Add(new Input{Type=1,Value=new Data{Key=new KeysInput{Scan=c,Flags=6}}});}Send(list.ToArray());
     }
+    internal static void Type(string text){var list=new System.Collections.Generic.List<Input>();list.Add(Press(0x10,false));foreach(char c in text){list.Add(Press(c,false));list.Add(Press(c,true));}list.Add(Press(0x10,true));Send(list.ToArray());}
     internal static void Key(ushort code){Send(Press(code,false),Press(code,true));}
     internal static void Shortcut(ushort code){Send(Press(0x11,false),Press(code,false),Press(code,true),Press(0x11,true));}
     private static Input Press(ushort code,bool up){return new Input{Type=1,Value=new Data{Key=new KeysInput{Virtual=code,Flags=up?2u:0u}}};}
