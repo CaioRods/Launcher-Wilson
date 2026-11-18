@@ -18,20 +18,19 @@ internal sealed class Central : Form
     private readonly ProgressBar progress;
     private readonly Update[] updates = new Update[2];
     private bool busy;
+    private readonly System.Action<int> openInWorkspace;
 
     [STAThread]
     private static void Main(string[] args)
     {
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
-        using (var window = new Central())
-        {
-            if (args.Length != 1 || args[0] != "--smoke-test") Application.Run(window);
-        }
+        SuiteHost.Run(args);
     }
 
-    private Central()
+    internal Central(System.Action<int> open = null)
     {
+        openInWorkspace = open;
         Text = "Central de Apps · Alimentos Wilson";
         Font = new Font("Segoe UI", 10f);
         AutoScaleMode = AutoScaleMode.Dpi;
@@ -171,7 +170,8 @@ internal sealed class Central : Form
                     // Batch installation skips an app already installed; once both are installed it opens both.
                     if (apps.Length == 1 || openExisting)
                     {
-                        Process.Start(new ProcessStartInfo(installed) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(installed) });
+                        if (openInWorkspace != null) openInWorkspace(app);
+                        else Process.Start(new ProcessStartInfo(installed) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(installed) });
                     }
                     finished++;
                     continue;
