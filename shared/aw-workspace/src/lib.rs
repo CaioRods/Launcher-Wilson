@@ -8,4 +8,6 @@ pub mod profile;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod control;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod handoff;
 pub mod window_frame;
