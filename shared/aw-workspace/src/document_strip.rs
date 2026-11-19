@@ -359,6 +359,31 @@ mod tests {
     }
 
     #[test]
+    fn background_drag_requests_native_move() {
+        let ctx = egui::Context::default();
+        let entries = vec![(1, "First".into(), true)];
+        let run = |events| {
+            let output = ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1000.0, 600.0))),
+                    events,
+                    ..Default::default()
+                },
+                |ui| {
+                    super::show(ui, &entries, egui::Color32::DARK_RED, false);
+                },
+            );
+            let moved = output.viewport_output.values().any(|o| o.commands.iter().any(|c| matches!(c, egui::ViewportCommand::StartDrag)));
+            output.drop_without_applying_deltas();
+            moved
+        };
+        run(vec![]);
+        let from = egui::pos2(700.0, 15.0);
+        run(vec![egui::Event::PointerMoved(from), pointer(from, true)]);
+        assert!(run(vec![egui::Event::PointerMoved(egui::pos2(740.0, 35.0))]), "blank header must initiate a native move");
+    }
+
+    #[test]
     fn pointer_drag_reorders_tabs() {
         let ctx = egui::Context::default();
         let entries = vec![(1, "First".into(), true), (2, "Second".into(), false)];

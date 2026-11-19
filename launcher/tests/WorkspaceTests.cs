@@ -68,7 +68,8 @@ internal static class WorkspaceTests
                             if(real){fixedHeaders=VerifyFixedHeaders(host,first,second);phase=31;since.Restart();return;}
                             host.ClosePage(second);phase=3;since.Restart();return;
                         }
-                        if(phase==31&&fixedHeaders.IsCompleted){Require(fixedHeaders.Result,"hosted headers must stay fixed");Native.SetForegroundWindow(host.Handle);Native.FocusEditor(second.Window);KeyboardTest.ClickOnPage(second.Window);phase=19;since.Restart();return;}
+                        if(phase==31&&fixedHeaders.IsCompleted){Require(fixedHeaders.Result,"hosted headers must stay fixed");Native.SetForegroundWindow(host.Handle);KeyboardTest.ClickAt(host.Handle,80,16);phase=18;since.Restart();return;}
+                        if(phase==18&&since.ElapsedMilliseconds>300){Native.FocusEditor(second.Window);KeyboardTest.ClickOnPage(second.Window);phase=19;since.Restart();return;}
                         if(phase==19 && since.ElapsedMilliseconds>500){KeyboardTest.DescribeFocus(second.Window);KeyboardTest.Type("AWCONTROLETESTE");phase=20;since.Restart();return;}
                         if(phase==20 && since.ElapsedMilliseconds>600){Capture(host,"real-word-after-typing");KeyboardTest.Shortcut(0x41);KeyboardTest.Shortcut(0x43);phase=21;since.Restart();return;}
                         if(phase==21 && since.ElapsedMilliseconds>500)
@@ -227,8 +228,8 @@ internal static class WorkspaceTests
     private static void TestWrite(Stream stream,string text){byte[] bytes=Encoding.UTF8.GetBytes(text+"\n");stream.Write(bytes,0,bytes.Length);}
     private static async Task<bool> DragReturn(SuiteHost host,EditorPage page)
     {
-        int count=host.Pages.Count;Native.SetForegroundWindow(page.Window);await Task.Delay(250);KeyboardTest.MovePress(page.Window,700,15);await Task.Delay(120);KeyboardTest.MoveClient(page.Window,740,35);await Task.Delay(250);
-        var target=host.PointToScreen(new Point(400,150));KeyboardTest.MoveCursor(target.X,target.Y);await Task.Delay(350);KeyboardTest.EndSelection();
+        int count=host.Pages.Count;Native.SetForegroundWindow(page.Window);await Task.Delay(250);KeyboardTest.DescribeFocus(page.Window);KeyboardTest.MovePress(page.Window,150,15);await Task.Delay(250);KeyboardTest.MoveClient(page.Window,180,65);await Task.Delay(400);
+        var target=host.PointToScreen(new Point(400,150));KeyboardTest.MoveCursor(target.X,target.Y);await Task.Delay(500);KeyboardTest.EndSelection();Native.RECT moved;Native.GetWindowRect(page.Window,out moved);Console.WriteLine("Drag ended at "+moved.Left+","+moved.Top+" size "+(moved.Right-moved.Left)+"x"+(moved.Bottom-moved.Top));
         for(int i=0;i<300;i++){await Task.Delay(100);if(host.Pages.Count>count&&host.ActivePage!=null&&!host.ActivePage.CommandBusy&&!host.ActivePage.Attaching&&Native.GetParent(host.ActivePage.Window)==host.Stage.Handle){Console.WriteLine("Actual OS drag/drop returned the editor to AWcontrol");return true;}}
         return false;
     }
