@@ -31,6 +31,7 @@ internal sealed class EditorPage
     internal int ControlPort;
     internal string ControlToken;
     internal Rectangle DockOrigin=Rectangle.Empty;
+    internal bool DockOriginMaximized;
     internal Size LastSize=Size.Empty;
     internal readonly Stopwatch TitleRefresh=Stopwatch.StartNew();
 }
@@ -628,6 +629,7 @@ internal static class Native
     [DllImport("user32.dll")] internal static extern bool GetClientRect(IntPtr h,out RECT rect);
     [DllImport("user32.dll")] internal static extern bool IsWindow(IntPtr h);
     [DllImport("user32.dll")] internal static extern bool IsWindowVisible(IntPtr h);
+    [DllImport("user32.dll")] internal static extern bool IsZoomed(IntPtr h);
     internal delegate bool EnumWindow(IntPtr h,IntPtr p);
     [DllImport("user32.dll")] internal static extern bool EnumWindows(EnumWindow fn,IntPtr p);
     [DllImport("user32.dll")] internal static extern uint GetWindowThreadProcessId(IntPtr h,out uint pid);

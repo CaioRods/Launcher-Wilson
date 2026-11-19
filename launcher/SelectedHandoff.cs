@@ -24,6 +24,7 @@ internal static class SelectedHandoff
             await WaitWindow(host,target);commitStarted=true;await EditorControl.Send(source,"commit",id);
             await EditorControl.Send(target,"accept",id);target.CommandBusy=false;completed=true;
             if(!source.DockOrigin.IsEmpty)Native.SetWindowPos(source.Window,IntPtr.Zero,source.DockOrigin.X,source.DockOrigin.Y,source.DockOrigin.Width,source.DockOrigin.Height,0x4014);
+            if(source.DockOriginMaximized){Native.ShowWindowAsync(source.Window,3);await Task.Delay(100);Native.SetForegroundWindow(host.Handle);}
         }
         catch(Exception error)
         {

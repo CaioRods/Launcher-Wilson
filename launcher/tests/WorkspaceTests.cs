@@ -94,7 +94,7 @@ internal static class WorkspaceTests
                             Require(detachTask.Result,"detaching must preserve the running editor");Require(Native.GetParent(second.Window)==IntPtr.Zero,"detached editor must be an independent window");Require(host.Pages.Count==1,"detached document must leave the tab list");
                             CaptureNative(second.Window,"real-word-detached");Console.WriteLine("Dirty Word detached without restarting its process");fixedHeaders=VerifyStandaloneResize(second.Window);phase=38;since.Restart();return;
                         }
-                        if(phase==38&&fixedHeaders.IsCompleted){Require(fixedHeaders.Result&&host.DetachedPages.Contains(second),"resizing Word must work without accidentally docking it");detachTask=DragReturn(host,second);phase=35;since.Restart();return;}
+                        if(phase==38&&fixedHeaders.IsCompleted){Require(fixedHeaders.Result&&host.DetachedPages.Contains(second),"resizing Word must work without accidentally docking it");Native.ShowWindowAsync(second.Window,3);detachTask=DragReturn(host,second);phase=35;since.Restart();return;}
                         if(phase==35&&detachTask.IsCompleted&&second.Attached.ElapsedMilliseconds>700)
                         {
                             Require(detachTask.Result&&host.Pages.Contains(second)&&Native.GetParent(second.Window)==host.Stage.Handle,"a detached Word must dock into the same host");

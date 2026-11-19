@@ -17,7 +17,7 @@ internal sealed class DockingService : IDisposable
     private readonly Timer discovery=new Timer{Interval=1500};
     private readonly Timer feedback=new Timer{Interval=100};
     private readonly ToolTip hint=new ToolTip{ShowAlways=true};
-    private bool targetHot;private Point lastHint;private Native.RECT moveStart;
+    private bool targetHot;private Point lastHint;private Native.RECT moveStart;private bool moveWasMaximized;
     internal DockingService(SuiteHost owner)
     {
         host=owner;cue=new Label{Text="Solte para devolver ao AWcontrol",AutoSize=false,TextAlign=ContentAlignment.MiddleCenter,BackColor=Color.FromArgb(147,20,37),ForeColor=Color.White,Font=new Font("Segoe UI",11,FontStyle.Bold),Visible=false,Height=38};
@@ -64,7 +64,7 @@ internal sealed class DockingService : IDisposable
         if(obj!=0||host.IsDisposed||!host.IsHandleCreated)return;
         try{host.BeginInvoke((Action)(()=>
         {
-            if(ev==0x000A){var candidate=host.DetachedPages.FirstOrDefault(p=>p.Window==window&&!p.Process.HasExited);if(candidate!=null){moving=candidate;Native.GetWindowRect(window,out moveStart);moving.DockOrigin=Rectangle.FromLTRB(moveStart.Left,moveStart.Top,moveStart.Right,moveStart.Bottom);cue.SetBounds(Math.Max(10,(host.ClientSize.Width-320)/2),44,320,38);targetHot=false;feedback.Start();UpdateTarget();}}
+            if(ev==0x000A){var candidate=host.DetachedPages.FirstOrDefault(p=>p.Window==window&&!p.Process.HasExited);if(candidate!=null){moving=candidate;Native.GetWindowRect(window,out moveStart);moveWasMaximized=Native.IsZoomed(window);moving.DockOriginMaximized=moveWasMaximized;moving.DockOrigin=Rectangle.FromLTRB(moveStart.Left,moveStart.Top,moveStart.Right,moveStart.Bottom);cue.SetBounds(Math.Max(10,(host.ClientSize.Width-320)/2),44,320,38);targetHot=false;feedback.Start();UpdateTarget();}}
             else if(moving!=null&&moving.Window==window)
             {
                 var page=moving;moving=null;feedback.Stop();hint.Hide(host);cue.Visible=false;
@@ -78,7 +78,7 @@ internal sealed class DockingService : IDisposable
         Native.RECT current;if(!Native.GetWindowRect(window,out current))return false;
         // Windows emits the same move/size events for a border resize. Resizing must
         // never adopt a document merely because its edge happens to overlap the central.
-        return current.Right-current.Left==moveStart.Right-moveStart.Left&&current.Bottom-current.Top==moveStart.Bottom-moveStart.Top&&(Math.Abs(current.Left-moveStart.Left)>3||Math.Abs(current.Top-moveStart.Top)>3);
+        return ((current.Right-current.Left==moveStart.Right-moveStart.Left&&current.Bottom-current.Top==moveStart.Bottom-moveStart.Top)||(moveWasMaximized&&!Native.IsZoomed(window)))&&(Math.Abs(current.Left-moveStart.Left)>3||Math.Abs(current.Top-moveStart.Top)>3);
     }
     private void UpdateTarget()
     {
