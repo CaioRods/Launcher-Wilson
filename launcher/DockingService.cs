@@ -32,14 +32,17 @@ internal sealed class DockingService : IDisposable
             foreach(var path in Directory.EnumerateFiles(folder,"*.json").Take(128))
             {
                 if(new FileInfo(path).Length>4096)continue;
-                var data=new JavaScriptSerializer{MaxJsonLength=4096,RecursionLimit=4}.DeserializeObject(File.ReadAllText(path)) as Dictionary<string,object>;
+                string raw=File.ReadAllText(path);
+                var data=new JavaScriptSerializer{MaxJsonLength=4096,RecursionLimit=4}.DeserializeObject(raw) as Dictionary<string,object>;
                 object pidValue,appValue,portValue,exeValue,version;
                 if(data==null||!data.TryGetValue("version",out version)||!Equals(version,1)||!data.TryGetValue("pid",out pidValue)||!(pidValue is int)||!data.TryGetValue("app",out appValue)||!(appValue is int)||!data.TryGetValue("port",out portValue)||!(portValue is int)||!data.TryGetValue("executable",out exeValue)||!(exeValue is string))continue;
-                int pid=(int)pidValue,app=(int)appValue,port=(int)portValue;if(pid<=0||app<0||app>1||port<1||port>65535||host.Pages.Concat(host.DetachedPages).Any(p=>p.Process.Id==pid))continue;
+                int pid=(int)pidValue,app=(int)appValue,port=(int)portValue;if(Path.GetFileNameWithoutExtension(path)!=pid.ToString()||pid<=0||app<0||app>1||port<1||port>65535||host.Pages.Concat(host.DetachedPages).Any(p=>p.Process.Id==pid))continue;
                 Process process=null;
                 try
                 {
-                    process=Process.GetProcessById(pid);if(process.HasExited||!string.Equals(process.MainModule.FileName,(string)exeValue,StringComparison.OrdinalIgnoreCase)){process.Dispose();continue;}
+                    try{process=Process.GetProcessById(pid);}
+                    catch(ArgumentException){if(File.ReadAllText(path)==raw)File.Delete(path);continue;} // Prune dead sessions so old records cannot hide a newly started app.
+                    if(process.HasExited||!string.Equals(process.MainModule.FileName,(string)exeValue,StringComparison.OrdinalIgnoreCase)){process.Dispose();continue;}
                     string installed=Distribution.InstalledPath(app);if(installed==null||!string.Equals(installed,(string)exeValue,StringComparison.OrdinalIgnoreCase)){process.Dispose();continue;}
                     IntPtr window=Native.FindWindow(pid);if(window==IntPtr.Zero||Native.GetParent(window)!=IntPtr.Zero){process.Dispose();continue;}
                     string token=null;if(app==0){string tokenPath=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),".gridcraft","control-"+port+".token");if(!File.Exists(tokenPath)||new FileInfo(tokenPath).Length>512){process.Dispose();continue;}token=File.ReadAllText(tokenPath).Trim();}
