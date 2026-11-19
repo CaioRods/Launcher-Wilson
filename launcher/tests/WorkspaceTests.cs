@@ -229,7 +229,7 @@ internal static class WorkspaceTests
     {
         int count=host.Pages.Count;Native.SetForegroundWindow(page.Window);await Task.Delay(250);KeyboardTest.MovePress(page.Window,700,15);await Task.Delay(120);KeyboardTest.MoveClient(page.Window,740,35);await Task.Delay(250);
         var target=host.PointToScreen(new Point(400,150));KeyboardTest.MoveCursor(target.X,target.Y);await Task.Delay(350);KeyboardTest.EndSelection();
-        for(int i=0;i<40;i++){await Task.Delay(100);if(host.Pages.Count>count&&host.ActivePage!=null&&!host.ActivePage.Attaching&&Native.GetParent(host.ActivePage.Window)==host.Stage.Handle){Console.WriteLine("Actual OS drag/drop returned the editor to AWcontrol");return true;}}
+        for(int i=0;i<40;i++){await Task.Delay(100);if(host.Pages.Count>count&&host.ActivePage!=null&&!host.ActivePage.CommandBusy&&!host.ActivePage.Attaching&&Native.GetParent(host.ActivePage.Window)==host.Stage.Handle){Console.WriteLine("Actual OS drag/drop returned the editor to AWcontrol");return true;}}
         return false;
     }
     private static async Task<bool> VerifyStandaloneResize(IntPtr window){await Task.Delay(400);await VerifyResize(window);Console.WriteLine("Native editor edge resizing passed");return true;}
