@@ -183,26 +183,27 @@ internal sealed class SuiteHost : Form
     }
     internal void SelectPage(EditorPage page)
     {
+        if(page!=null&&!Pages.Contains(page))return;
         closeAll=false;
         ActivePage=page;
-        foreach(var p in Pages) if(p.Window!=IntPtr.Zero) {if(p!=page)Native.EditorActive(p.Window,false);Native.ShowWindowAsync(p.Window,p==page?5:0);}
+        foreach(var p in Pages) if(p.Window!=IntPtr.Zero&&!p.Attaching&&!p.Detaching) {if(p!=page)Native.EditorActive(p.Window,false);Native.ShowWindowAsync(p.Window,p==page?5:0);}
         Home.Visible=page==null;
         if(page==null){Home.Navigate("home");Home.BringToFront();}
-        else if(page.Window!=IntPtr.Zero){ Native.FocusEditor(page.Window);status.Text=page.Title; }
+        else if(page.Window!=IntPtr.Zero&&!page.Attaching&&!page.Detaching){ Native.FocusEditor(page.Window);status.Text=page.Title; }
         ResizeEditors();strip.EnsureVisible(page);strip.Animate();
     }
     internal void ClosePage(EditorPage page)
     {
-        if(page.Process.HasExited)return;
+        if(!Pages.Contains(page)||page.Detaching||page.CommandBusy||page.Process.HasExited)return;
         SelectPage(page);
         page.CloseSent=true;
         if(page.Window!=IntPtr.Zero) {Native.PostMessage(page.Window,0x0010,IntPtr.Zero,IntPtr.Zero);status.Text="Fechando página. Confirme o salvamento no editor, se solicitado."; }
     }
     internal void Reorder(EditorPage page, int index)
-    { if(index<0 || index>=Pages.Count)return;Pages.Remove(page);Pages.Insert(index,page);strip.EnsureVisible(ActivePage);strip.Animate(); }
+    { if(index<0 || index>=Pages.Count||!Pages.Contains(page)||page.Detaching)return;Pages.Remove(page);Pages.Insert(index,page);strip.EnsureVisible(ActivePage);strip.Animate(); }
     private void ResizeEditors()
     {
-        foreach(var p in Pages)if(p.Window!=IntPtr.Zero && !p.Attaching && !p.Process.HasExited && p.LastSize!=Stage.ClientSize)
+        foreach(var p in Pages)if(p.Window!=IntPtr.Zero && !p.Attaching && !p.Detaching && !p.Process.HasExited && p.LastSize!=Stage.ClientSize)
         {Native.Resize(p.Window,0,0,Stage.ClientSize.Width,Stage.ClientSize.Height);p.LastSize=Stage.ClientSize;}
     }
     private void TickEditors()
@@ -298,7 +299,11 @@ internal sealed class SuiteHost : Form
             // The editor keeps its process and dirty document. Closing the central won't close it.
             detachedProcesses.Add(page.Process);return true;
         }
-        catch(Exception error){if(!(error is IOException||error is SocketException||error is AggregateException||error is InvalidOperationException||error is UnauthorizedAccessException||error is ArgumentException))throw;page.Detaching=false;Notify("Não foi possível destacar a página. Tente novamente quando o editor terminar de iniciar.");return false;}
+        catch(Exception error){if(!(error is IOException||error is SocketException||error is AggregateException||error is InvalidOperationException||error is UnauthorizedAccessException||error is ArgumentException))throw;}
+        // A lost reply may arrive after the native mode changed. Restore hosted mode before
+        // accepting another drag/close, so a partial transition cannot leave an orphan tab.
+        try{if(NativeCommands)await EditorControl.Send(page,"embed");}catch(Exception error){if(!(error is IOException||error is SocketException||error is AggregateException||error is InvalidOperationException||error is UnauthorizedAccessException||error is ArgumentException))throw;}
+        page.Detaching=false;Notify("Não foi possível destacar a página. Ela continua aberta no AWcontrol.");return false;
     }
     private async void RefreshDocumentPath(EditorPage page)
     {
