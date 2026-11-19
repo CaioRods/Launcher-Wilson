@@ -173,7 +173,7 @@ internal static class WorkspaceTests
             KeyboardTest.HeaderDoubleClick(page.Window);await Task.Delay(350);Native.GetWindowRect(page.Window,out after);Require(before.Left==after.Left&&before.Top==after.Top&&before.Right==after.Right&&before.Bottom==after.Bottom,"double-clicking the editor header must not maximize its hosted page");
             Require((Native.GetWindowLongPtr(page.Window,-20).ToInt64()&0x00040000L)==0,"hosted editor must not advertise its own taskbar button");
             // Clicking the Word title legitimately opens Rename; dismiss it before testing page input.
-            KeyboardTest.Key(0x1B);await Task.Delay(350);
+            KeyboardTest.Key(0x1B);await Task.Delay(350);if(page.App==1){KeyboardTest.ClickAt(page.Window,650,318);await Task.Delay(350);}
         }
         host.SelectPage(second);Console.WriteLine("Hosted Excel/Word headers stay fixed and taskbar styles are hidden");return true;
     }
@@ -246,7 +246,7 @@ internal static class KeyboardTest
     [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)] private struct GuiInfo {internal uint Size,Flags;internal IntPtr Active,Focus,Capture,MenuOwner,MoveSize,Caret;internal Native.RECT CaretRect;}
     [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool GetGUIThreadInfo(uint thread,ref GuiInfo info);
     [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
-    internal static void DescribeFocus(IntPtr window){uint pid;uint thread=Native.GetWindowThreadProcessId(window,out pid);var info=new GuiInfo{Size=(uint)System.Runtime.InteropServices.Marshal.SizeOf(typeof(GuiInfo))};GetGUIThreadInfo(thread,ref info);Console.WriteLine("Keyboard target="+window+" focus="+info.Focus+" active="+info.Active+" foreground="+GetForegroundWindow());}
+    internal static void DescribeFocus(IntPtr window){uint pid;uint thread=Native.GetWindowThreadProcessId(window,out pid);var info=new GuiInfo{Size=(uint)System.Runtime.InteropServices.Marshal.SizeOf(typeof(GuiInfo))};GetGUIThreadInfo(thread,ref info);uint focusPid;Native.GetWindowThreadProcessId(info.Focus,out focusPid);Console.WriteLine("Keyboard target="+window+" focus="+info.Focus+" focus-pid="+focusPid+" editor-pid="+pid+" active="+info.Active+" foreground="+GetForegroundWindow());}
     [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)] private struct Input {internal uint Type;internal Data Value;}
     [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit)] private struct Data {[System.Runtime.InteropServices.FieldOffset(0)] internal KeysInput Key;[System.Runtime.InteropServices.FieldOffset(0)] internal MouseInput Mouse;}
     [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)] private struct KeysInput {internal ushort Virtual,Scan;internal uint Flags,Time;internal IntPtr Extra;}
@@ -261,6 +261,7 @@ internal static class KeyboardTest
     private static void MoveTo(IntPtr window,int x,int y){var p=new Native.POINT{X=x,Y=y};Native.ClientToScreen(window,ref p);SetCursorPos(p.X,p.Y);}
     internal static void HeaderPress(IntPtr window){MoveTo(window,500,15);Send(new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=2}}});}
     internal static void HeaderMove(IntPtr window){MoveTo(window,580,45);}
+    internal static void ClickAt(IntPtr window,int x,int y){MoveTo(window,x,y);Send(new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=2}}},new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=4}}});}
     internal static void RootDoubleClick(IntPtr window){MoveTo(window,80,16);ClickTwice();}
     private static void ClickTwice(){Send(new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=2}}},new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=4}}},new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=2}}},new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=4}}});}
     internal static void HeaderDoubleClick(IntPtr window){MoveTo(window,500,15);Send(new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=2}}},new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=4}}},new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=2}}},new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=4}}});}
