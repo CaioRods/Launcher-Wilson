@@ -38,6 +38,7 @@ internal sealed class WilsonHome : Control
     private Image avatar;
     private float scale=1,offset,contentHeight;
     private bool mainDrawing;
+    private int modelFilter=-1;
     private string hotGroup="";
     private readonly Dictionary<string,RectangleF> groups=new Dictionary<string,RectangleF>();
     private readonly Dictionary<string,string> dates=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
@@ -272,9 +273,13 @@ internal sealed class WilsonHome : Control
     {Fill(g,r,Color.White,6);using(var path=WorkspaceStrip.Round(r,6))using(var p=new Pen(Color.FromArgb(207,196,187)))g.DrawPath(p,path);Fill(g,new RectangleF(r.X+10,r.Y+9,r.Width-20,5),app==0?Color.FromArgb(174,29,43):Color.FromArgb(185,128,22),1);using(var p=new Pen(Color.FromArgb(215,210,204))){for(int i=0;i<4;i++)g.DrawLine(p,r.X+10,r.Y+22+i*7,r.Right-10,r.Y+22+i*7);if(app==0)for(int i=0;i<4;i++)g.DrawLine(p,r.X+10+i*(r.Width-20)/3,r.Y+18,r.X+10+i*(r.Width-20)/3,r.Bottom-9);}}
     private void DrawModelGallery(Graphics g,float x,float y,float width)
     {
+        string[] filters={"Todos","Excel AW","Word AW"};
+        for(int i=0;i<filters.Length;i++){int filter=i-1;ActionButton(g,"modelsfilter"+i,new RectangleF(x+i*118,y,108,30),filters[i],filter==1?SuiteHost.Gold:SuiteHost.Red,()=>{modelFilter=filter;offset=0;Invalidate();},modelFilter!=filter);}
+        y+=48;
         int cols=width>=1050?3:width>=610?2:1;float gap=14,cw=(width-(cols-1)*gap)/cols;bool any=false;
         for(int app=0;app<2;app++)
         {
+            if(modelFilter!=-1&&modelFilter!=app)continue;
             var models=TemplateCatalog.Items.Where(m=>m.App==app&&(search.Text.Length==0||(m.Title+" "+m.Description+" "+(app==0?"Excel planilha":"Word documento")).IndexOf(search.Text,StringComparison.CurrentCultureIgnoreCase)>=0)).ToArray();
             if(models.Length==0)continue;any=true;
             g.DrawImage(SuiteHost.Logos[app],new RectangleF(x,y+2,28,28));

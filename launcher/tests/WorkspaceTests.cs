@@ -98,7 +98,7 @@ internal static class WorkspaceTests
                         {
                             Require(detachTask.Result&&host.Pages.Contains(second)&&Native.GetParent(second.Window)==host.Stage.Handle,"a detached Word must dock into the same host");
                             Require(!second.Process.HasExited&&!host.DetachedPages.Contains(second),"docking must retain the live process and remove its standalone window");
-                            Native.FocusEditor(second.Window);KeyboardTest.Shortcut(0x41);KeyboardTest.Shortcut(0x43);phase=36;since.Restart();return;
+                            Native.FocusEditor(second.Window);Clipboard.Clear();KeyboardTest.Shortcut(0x41);KeyboardTest.Shortcut(0x43);phase=36;since.Restart();return;
                         }
                         if(phase==36&&since.ElapsedMilliseconds>500)
                         {
@@ -210,7 +210,7 @@ internal static class WorkspaceTests
         var strip=host.Controls.OfType<WorkspaceStrip>().Single();strip.NewFileMenu.Show(strip,Point.Empty);strip.NewFileMenu.Close();Require(!strip.NewFileMenu.IsDisposed,"new-file menu must survive close");strip.NewFileMenu.Show(strip,Point.Empty);strip.NewFileMenu.Close();
         Require(host.Home.FilteredFiles().Length==1,"search must filter real file names");host.Home.InvokeAction("favorite0");host.Home.Navigate("favorites");host.Home.SearchText="";host.Home.Refresh();Require(host.Home.FilteredFiles().Length==1,"favorites must contain only the selected file");CaptureHome(host,"home-favorites");
         host.ManageApps();host.Home.Refresh();Require(host.Home.Page=="apps","applications must be a page");Require(host.Home.Controls.OfType<Central>().Single().Visible,"application management must remain inside Home");Require(host.OwnedForms.Length==0,"applications must not open a separate window");CaptureHome(host,"applications-page");
-        host.Home.Navigate("models");host.Home.Refresh();Require(host.Home.ActionBounds("modelaw_budget").Width>0,"budget model must be actionable");CaptureHome(host,"home-models");
+        host.Home.Navigate("models");host.Home.Refresh();Require(host.Home.ActionBounds("modelaw_budget").Width>0,"budget model must be actionable");CaptureHome(host,"home-models");host.Home.InvokeAction("modelsfilter2");host.Home.Refresh();Require(host.Home.ActionBounds("modelaw_report").Width>0&&host.Home.ActionBounds("modelaw_budget").IsEmpty,"Word filter must show only its own templates");CaptureHome(host,"word-models");host.Home.InvokeAction("modelsfilter0");host.Home.Refresh();
         host.Home.Navigate("settings");host.Home.Refresh();bool before=host.Home.Animations;host.Home.InvokeAction("motion");Require(!host.Home.Animations,"reduced motion must disable transitions");host.Home.InvokeAction("motion");host.Home.Refresh();
         host.Home.Navigate("home");host.Size=new Size(720,500);host.Home.Refresh();var profile=host.Home.ActionBounds("profile");var settings=host.Home.ActionBounds("settings");Require(!profile.IntersectsWith(settings),"sidebar account and settings must not overlap at minimum height");CaptureHome(host,"home-reference-compact");
         host.Size=new Size(1000,700);host.Home.Refresh();
