@@ -312,14 +312,15 @@ internal sealed class SuiteHost : Form
     internal async Task<bool> DockPage(EditorPage page)
     {
         if(!DetachedPages.Contains(page)||page.Attaching||page.Detaching||page.CommandBusy||page.Process.HasExited||!Native.IsWindow(page.Window))return false;
-        page.Detaching=true;
+        page.Detaching=true;bool requested=false;
         try
         {
-            if(NativeCommands){var state=await EditorControl.Send(page,"state");object pid;if(state.TryGetValue("pid",out pid)&&!Equals(pid,page.Process.Id))throw new IOException("A sessão do editor mudou.");await EditorControl.Send(page,"embed");}
+            if(NativeCommands){var state=await EditorControl.Send(page,"state");object pid;if(state.TryGetValue("pid",out pid)&&!Equals(pid,page.Process.Id))throw new IOException("A sessão do editor mudou.");requested=true;await EditorControl.Send(page,"embed");}
             DetachedPages.Remove(page);page.CloseSent=false;page.Detaching=false;page.LastSize=Size.Empty;
-            Pages.Add(page);SelectPage(page);AttachEditor(page,page.Window);Native.SetForegroundWindow(Handle);return true;
+            page.Attached.Reset();page.Attaching=true;Pages.Add(page);SelectPage(page);AttachEditor(page,page.Window);Native.SetForegroundWindow(Handle);return true;
         }
         catch(Exception error){if(!(error is IOException||error is SocketException||error is AggregateException||error is InvalidOperationException||error is UnauthorizedAccessException||error is ArgumentException))throw;}
+        if(requested){try{await EditorControl.Send(page,"detach");}catch(Exception error){if(!(error is IOException||error is SocketException||error is AggregateException||error is InvalidOperationException||error is UnauthorizedAccessException||error is ArgumentException))throw;}}
         page.Detaching=false;Notify("Não foi possível devolver a página. O editor continua aberto separadamente.");return false;
     }
     private async void RefreshDocumentPath(EditorPage page)
@@ -364,6 +365,7 @@ internal sealed class SuiteHost : Form
     }
     protected override void WndProc(ref Message m)
     {
+        if(m.Msg==0x00A1&&m.WParam.ToInt32()>=10&&m.WParam.ToInt32()<=17&&chrome!=null){chrome.BeginResize(m.WParam.ToInt32());m.Result=IntPtr.Zero;return;}
         if(m.Msg==0x0083){m.Result=IntPtr.Zero;return;} // Keep resize/Snap styles without a second title bar.
         if(m.Msg==0x007F){m.Result=Icon==null?IntPtr.Zero:Icon.Handle;return;}
         if(m.Msg==0x0080&&Icon!=null)m.LParam=Icon.Handle;

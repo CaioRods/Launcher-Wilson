@@ -11,7 +11,7 @@ internal static class TemplateCatalog
     internal static readonly WorkspaceTemplate[] Items={
         new WorkspaceTemplate(0,"aw_budget","Orçamento mensal","Receitas, despesas e saldo em reais."),
         new WorkspaceTemplate(0,"aw_sales","Controle de vendas","Pedidos, quantidades e faturamento."),
-        new WorkspaceTemplate(0,"aw_stock","Controle de estoque","Entradas, saídas e estoque mínimo."),
+        new WorkspaceTemplate(0,"aw_stock","Controle de estoque","Entradas, saídas e saldo por produto."),
         new WorkspaceTemplate(0,"aw_tasks","Planejamento de tarefas","Responsáveis, prazos e andamento."),
         new WorkspaceTemplate(0,"recebimento","Conferência de recebimento","Pedidos e quantidades recebidas."),
         new WorkspaceTemplate(0,"aw_cash","Fluxo de caixa","Movimentações e saldo disponível."),

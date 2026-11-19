@@ -28,7 +28,7 @@ image against the installed application, authenticates and verifies the live PID
 Stale records never launch processes. Closed processes are removed from the in-memory catalog.
 
 Move a standalone window, or pull a native tab away from its strip, and drop over the AWcontrol
-header. The cue identifies the target. The same process/HWND moves into the workspace and is
+window. The cue identifies the target. The same process/HWND moves into the workspace and is
 removed from the standalone list. With several native tabs, the whole window is transferred and
 the internal tabs remain accessible; there is no silent loss of background documents. Moving just
 one document out of a multi-document process is a separate ownership problem and is not claimed.

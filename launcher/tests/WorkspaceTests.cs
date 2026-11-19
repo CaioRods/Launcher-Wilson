@@ -92,8 +92,9 @@ internal static class WorkspaceTests
                         if(phase==30 && detachTask.IsCompleted)
                         {
                             Require(detachTask.Result,"detaching must preserve the running editor");Require(Native.GetParent(second.Window)==IntPtr.Zero,"detached editor must be an independent window");Require(host.Pages.Count==1,"detached document must leave the tab list");
-                            CaptureNative(second.Window,"real-word-detached");Console.WriteLine("Dirty Word detached without restarting its process");detachTask=host.DockPage(second);phase=35;since.Restart();return;
+                            CaptureNative(second.Window,"real-word-detached");Console.WriteLine("Dirty Word detached without restarting its process");fixedHeaders=VerifyStandaloneResize(second.Window);phase=38;since.Restart();return;
                         }
+                        if(phase==38&&fixedHeaders.IsCompleted){Require(fixedHeaders.Result,"Word standalone resize must work");detachTask=host.DockPage(second);phase=35;since.Restart();return;}
                         if(phase==35&&detachTask.IsCompleted&&second.Attached.ElapsedMilliseconds>700)
                         {
                             Require(detachTask.Result&&host.Pages.Contains(second)&&Native.GetParent(second.Window)==host.Stage.Handle,"a detached Word must dock into the same host");
@@ -180,6 +181,7 @@ internal static class WorkspaceTests
     {
         Native.RECT before,after;Native.GetWindowRect(window,out before);KeyboardTest.ResizeStart(window);await Task.Delay(200);KeyboardTest.MoveCursor(before.Right+70,(before.Top+before.Bottom)/2);await Task.Delay(300);KeyboardTest.EndSelection();await Task.Delay(300);Native.GetWindowRect(window,out after);Require(after.Right-after.Left>before.Right-before.Left+30,"dragging a window edge must change its width");
     }
+    private static async Task<bool> VerifyStandaloneResize(IntPtr window){await Task.Delay(400);await VerifyResize(window);Console.WriteLine("Native editor edge resizing passed");return true;}
     private static async Task<bool> VerifyFixedHeaders(SuiteHost host,EditorPage first,EditorPage second)
     {
         foreach(var page in new[]{first,second})
@@ -188,6 +190,7 @@ internal static class WorkspaceTests
             Require(before.Left==after.Left&&before.Top==after.Top&&before.Right==after.Right&&before.Bottom==after.Bottom,"dragging the editor header must not move its hosted page");
             KeyboardTest.HeaderDoubleClick(page.Window);await Task.Delay(350);Native.GetWindowRect(page.Window,out after);Require(before.Left==after.Left&&before.Top==after.Top&&before.Right==after.Right&&before.Bottom==after.Bottom,"double-clicking the editor header must not maximize its hosted page");
             Require((Native.GetWindowLongPtr(page.Window,-20).ToInt64()&0x00040000L)==0,"hosted editor must not advertise its own taskbar button");
+            Require(Native.SendMessage(host.Handle,0x007F,new IntPtr(1),IntPtr.Zero)==host.Icon.Handle,"central must always report its AWcontrol icon, including with an active editor");
             // Clicking the Word title legitimately opens Rename; dismiss it before testing page input.
             KeyboardTest.Key(0x1B);await Task.Delay(350);if(page.App==1){KeyboardTest.ClickAt(page.Window,650,318);await Task.Delay(350);}
         }

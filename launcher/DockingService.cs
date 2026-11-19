@@ -15,10 +15,13 @@ internal sealed class DockingService : IDisposable
     private readonly SuiteHost host;private readonly WinEvent callback;private readonly IntPtr hook;
     private EditorPage moving;private readonly Label cue;
     private readonly Timer discovery=new Timer{Interval=1500};
+    private readonly Timer feedback=new Timer{Interval=100};
+    private readonly ToolTip hint=new ToolTip{ShowAlways=true};
+    private bool targetHot;private Point lastHint;
     internal DockingService(SuiteHost owner)
     {
         host=owner;cue=new Label{Text="Solte para devolver ao AWcontrol",AutoSize=false,TextAlign=ContentAlignment.MiddleCenter,BackColor=Color.FromArgb(147,20,37),ForeColor=Color.White,Font=new Font("Segoe UI",11,FontStyle.Bold),Visible=false,Height=38};
-        host.Controls.Add(cue);discovery.Tick+=(s,e)=>Discover();discovery.Start();callback=OnMove;hook=SetWinEventHook(0x000A,0x000B,IntPtr.Zero,callback,0,0,0);
+        host.Controls.Add(cue);feedback.Tick+=(s,e)=>UpdateTarget();discovery.Tick+=(s,e)=>Discover();discovery.Start();callback=OnMove;hook=SetWinEventHook(0x000A,0x000B,IntPtr.Zero,callback,0,0,0);
     }
     private void Discover()
     {
@@ -54,18 +57,24 @@ internal sealed class DockingService : IDisposable
         if(obj!=0||host.IsDisposed||!host.IsHandleCreated)return;
         try{host.BeginInvoke((Action)(()=>
         {
-            if(ev==0x000A){moving=host.DetachedPages.FirstOrDefault(p=>p.Window==window&&!p.Process.HasExited);if(moving!=null){cue.SetBounds(Math.Max(10,(host.ClientSize.Width-320)/2),44,320,38);cue.Visible=true;cue.BringToFront();}}
+            if(ev==0x000A){moving=host.DetachedPages.FirstOrDefault(p=>p.Window==window&&!p.Process.HasExited);if(moving!=null){cue.SetBounds(Math.Max(10,(host.ClientSize.Width-320)/2),44,320,38);targetHot=false;feedback.Start();UpdateTarget();}}
             else if(moving!=null&&moving.Window==window)
             {
-                var page=moving;moving=null;cue.Visible=false;
-                // Only the tab strip accepts the drop; document editing elsewhere stays unaffected.
+                var page=moving;moving=null;feedback.Stop();hint.Hide(host);cue.Visible=false;
+                // Only an OS window drag can dock; ordinary editing clicks are never interpreted as drops.
                 if(DropBounds.Contains(Cursor.Position))Return(page);
             }
         }));}catch(InvalidOperationException){}
     }
-    internal Rectangle DropBounds{get{return host.RectangleToScreen(new Rectangle(0,0,host.ClientSize.Width,80));}}
+    private void UpdateTarget()
+    {
+        if(moving==null)return;bool hot=DropBounds.Contains(Cursor.Position)&&host.WindowState!=FormWindowState.Minimized;cue.Visible=hot;
+        if(hot){cue.BringToFront();Point p=host.PointToClient(Cursor.Position);if(!targetHot||Math.Abs(p.X-lastHint.X)+Math.Abs(p.Y-lastHint.Y)>40){hint.Show("Solte para devolver ao AWcontrol",host,p.X+18,p.Y+24,20000);lastHint=p;}}
+        else if(targetHot)hint.Hide(host);targetHot=hot;
+    }
+    internal Rectangle DropBounds{get{return host.RectangleToScreen(host.ClientRectangle);}}
     private async void Return(EditorPage page){await host.DockPage(page);}
-    public void Dispose(){discovery.Dispose();if(hook!=IntPtr.Zero)UnhookWinEvent(hook);cue.Dispose();}
+    public void Dispose(){feedback.Dispose();hint.Dispose();discovery.Dispose();if(hook!=IntPtr.Zero)UnhookWinEvent(hook);cue.Dispose();}
     private delegate void WinEvent(IntPtr hook,uint ev,IntPtr window,int obj,int child,uint thread,uint time);
     [DllImport("user32.dll")] private static extern IntPtr SetWinEventHook(uint min,uint max,IntPtr module,WinEvent callback,uint process,uint thread,uint flags);
     [DllImport("user32.dll")] private static extern bool UnhookWinEvent(IntPtr hook);

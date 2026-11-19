@@ -31,11 +31,11 @@ jobs:
         include:
           - app: Excel
             repository: CaioRods/Excel-AW
-            revision: 27fa580c7272099d6746ac727b89499ddfcac3ea
+            revision: 799973aa12e088b83d7297e4fe17d4390a2eee46
             package: gridcraft
           - app: Word
             repository: CaioRods/Word-AW
-            revision: 2d58b6c5a4851702f2e7f1fae0b4a550fa9479de
+            revision: 921eaf3569d2d1a377f1eb70d4f25e90a30431e4
             package: wordcraft
     steps:
       - uses: actions/checkout@v4
@@ -142,10 +142,10 @@ jobs:
         include:
           - app: Excel
             repository: CaioRods/Excel-AW
-            revision: 27fa580c7272099d6746ac727b89499ddfcac3ea
+            revision: 799973aa12e088b83d7297e4fe17d4390a2eee46
           - app: Word
             repository: CaioRods/Word-AW
-            revision: 2d58b6c5a4851702f2e7f1fae0b4a550fa9479de
+            revision: 921eaf3569d2d1a377f1eb70d4f25e90a30431e4
     steps:
       - uses: actions/checkout@v4
         with:
@@ -171,6 +171,7 @@ jobs:
             cargo test --locked -p gridcraft-ui-egui --lib aw_surface_tests -- --nocapture
             cargo test --locked -p gridcraft-ui-egui --lib aw_workspace_action_tests -- --nocapture
             cargo test --locked -p gridcraft-engine --lib aw_rename_tests -- --nocapture
+            cargo test --locked -p gridcraft-engine --lib aw_template_tests -- --nocapture
             cargo test --locked -p gridcraft-ui-egui --lib aw_deselection_tests -- --nocapture
             cargo test --locked -p gridcraft-ui-egui --test it file_menu::aw_sidebar_ -- --nocapture
             cargo test --locked -p gridcraft-ui-egui --test it file_menu::hosted_excel_dont_save -- --nocapture
@@ -178,6 +179,8 @@ jobs:
             cargo test --locked -p wordcraft-ui-egui --lib backstage::tests::aw_sidebar_ -- --nocapture
             cargo test --locked -p wordcraft-ui-egui --lib aw_surface_tests -- --nocapture
             cargo test --locked -p wordcraft-ui-egui --lib aw_host_tests -- --nocapture
+            cargo test --locked -p wordcraft-engine --lib aw_portuguese_templates -- --nocapture
+            cargo test --locked -p wordcraft --bin wordcraft control_server::tests::an_accept_thread_spawn_failure -- --nocapture
             cargo test --locked -p wordcraft-ui-egui --lib every_side_menu_item_has_a_drawn_icon -- --nocapture
           fi
 
