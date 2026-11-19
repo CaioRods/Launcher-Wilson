@@ -31,11 +31,11 @@ jobs:
         include:
           - app: Excel
             repository: CaioRods/Excel-AW
-            revision: 71ac0373f74e33e8b84bd256f1109f759374e6d3
+            revision: 27fa580c7272099d6746ac727b89499ddfcac3ea
             package: gridcraft
           - app: Word
             repository: CaioRods/Word-AW
-            revision: 4e2c4139c722de89f06fffbadd75bd14f3e7299d
+            revision: 09c67b8f9d2e14a52f2e24f1ad1a26c81229ff3b
             package: wordcraft
     steps:
       - uses: actions/checkout@v4
@@ -142,10 +142,10 @@ jobs:
         include:
           - app: Excel
             repository: CaioRods/Excel-AW
-            revision: 71ac0373f74e33e8b84bd256f1109f759374e6d3
+            revision: 27fa580c7272099d6746ac727b89499ddfcac3ea
           - app: Word
             repository: CaioRods/Word-AW
-            revision: 4e2c4139c722de89f06fffbadd75bd14f3e7299d
+            revision: 09c67b8f9d2e14a52f2e24f1ad1a26c81229ff3b
     steps:
       - uses: actions/checkout@v4
         with:
