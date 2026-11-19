@@ -38,7 +38,9 @@ internal sealed class SuiteHost : Form
 {
     internal readonly List<EditorPage> Pages = new List<EditorPage>();
     internal EditorPage ActivePage;
-    private readonly List<Process> detachedProcesses=new List<Process>();
+    internal readonly List<EditorPage> DetachedPages=new List<EditorPage>();
+    private readonly WindowChrome chrome;
+    private readonly DockingService docking;
     internal readonly Panel Stage = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(248,248,249) };
     private readonly WorkspaceStrip strip;
     internal readonly WilsonHome Home;
@@ -75,12 +77,14 @@ internal sealed class SuiteHost : Form
         Size = new Size(1200,780);
         StartPosition = FormStartPosition.CenterScreen;
         BackColor = Color.FromArgb(248,248,249);
-        Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+        using(var art=typeof(SuiteHost).Assembly.GetManifestResourceStream("awcontrol.ico"))
+            Icon=art==null?Icon.ExtractAssociatedIcon(Application.ExecutablePath):new Icon(art);
         Home = new WilsonHome(this);
         strip = new WorkspaceStrip(this) { Dock = DockStyle.Top, Height = 40 };
         var body=new Panel{Dock=DockStyle.Fill,Padding=Padding.Empty,BackColor=Color.FromArgb(235,232,230)};body.Controls.Add(Stage);
         Controls.Add(body); Controls.Add(status); Controls.Add(strip);
         Stage.Controls.Add(Home);
+        chrome=new WindowChrome(this);docking=new DockingService(this);
         status.Visible=false;
         status.TextChanged+=(s,e)=>{status.Visible=new[]{"Não","Arquivo não","Feche","Falha","O editor"}.Any(prefix=>status.Text.StartsWith(prefix,StringComparison.Ordinal));};
         AllowDrop = true;
@@ -95,7 +99,7 @@ internal sealed class SuiteHost : Form
         SizeChanged+=(s,e)=>Native.RoundWindow(this);
         HandleCreated+=(s,e)=>Native.RoundWindow(this);
         FormClosing += ClosingWorkspace;
-        FormClosed += (s,e) => { poll.Dispose(); if(broker!=null) broker.Dispose(); foreach(var p in Pages) p.Process.Dispose();foreach(var p in detachedProcesses)p.Dispose(); };
+        FormClosed += (s,e) => { poll.Dispose(); if(broker!=null) broker.Dispose(); foreach(var p in Pages) p.Process.Dispose();foreach(var p in DetachedPages)p.Process.Dispose();docking.Dispose();chrome.Dispose(); };
     }
 
     internal static void Run(string[] args)
@@ -297,13 +301,26 @@ internal sealed class SuiteHost : Form
             Pages.Remove(page);if(ActivePage==page)SelectPage(Pages.LastOrDefault());strip.Animate();
             Native.RoundHandle(window);Native.ShowWindowAsync(window,5);Native.SetForegroundWindow(window);Native.FocusEditor(window);
             // The editor keeps its process and dirty document. Closing the central won't close it.
-            detachedProcesses.Add(page.Process);return true;
+            page.Detaching=false;DetachedPages.Add(page);return true;
         }
         catch(Exception error){if(!(error is IOException||error is SocketException||error is AggregateException||error is InvalidOperationException||error is UnauthorizedAccessException||error is ArgumentException))throw;}
         // A lost reply may arrive after the native mode changed. Restore hosted mode before
         // accepting another drag/close, so a partial transition cannot leave an orphan tab.
         try{if(NativeCommands)await EditorControl.Send(page,"embed");}catch(Exception error){if(!(error is IOException||error is SocketException||error is AggregateException||error is InvalidOperationException||error is UnauthorizedAccessException||error is ArgumentException))throw;}
         page.Detaching=false;Notify("Não foi possível destacar a página. Ela continua aberta no AWcontrol.");return false;
+    }
+    internal async Task<bool> DockPage(EditorPage page)
+    {
+        if(!DetachedPages.Contains(page)||page.Attaching||page.Detaching||page.CommandBusy||page.Process.HasExited||!Native.IsWindow(page.Window))return false;
+        page.Detaching=true;
+        try
+        {
+            if(NativeCommands){var state=await EditorControl.Send(page,"state");object pid;if(state.TryGetValue("pid",out pid)&&!Equals(pid,page.Process.Id))throw new IOException("A sessão do editor mudou.");await EditorControl.Send(page,"embed");}
+            DetachedPages.Remove(page);page.CloseSent=false;page.Detaching=false;page.LastSize=Size.Empty;
+            Pages.Add(page);SelectPage(page);AttachEditor(page,page.Window);Native.SetForegroundWindow(Handle);return true;
+        }
+        catch(Exception error){if(!(error is IOException||error is SocketException||error is AggregateException||error is InvalidOperationException||error is UnauthorizedAccessException||error is ArgumentException))throw;}
+        page.Detaching=false;Notify("Não foi possível devolver a página. O editor continua aberto separadamente.");return false;
     }
     private async void RefreshDocumentPath(EditorPage page)
     {
@@ -341,8 +358,15 @@ internal sealed class SuiteHost : Form
         object args=app==0?(object)new{sample=key}:new{template=key};
         OpenDocument(app,null,new JavaScriptSerializer().Serialize(new{command="file.new",@params=args}));
     }
+    protected override CreateParams CreateParams
+    {
+        get{var cp=base.CreateParams;cp.Style|=0x00040000|0x00020000|0x00010000;return cp;}
+    }
     protected override void WndProc(ref Message m)
     {
+        if(m.Msg==0x0083){m.Result=IntPtr.Zero;return;} // Keep resize/Snap styles without a second title bar.
+        if(m.Msg==0x007F){m.Result=Icon==null?IntPtr.Zero:Icon.Handle;return;}
+        if(m.Msg==0x0080&&Icon!=null)m.LParam=Icon.Handle;
         if(m.Msg==0x00A3&&m.WParam.ToInt32()==2){ToggleMaximized();m.Result=IntPtr.Zero;return;}
         const int HIT=0x84;
         if(m.Msg==HIT && WindowState==FormWindowState.Normal)

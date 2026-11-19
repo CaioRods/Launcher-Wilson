@@ -272,10 +272,28 @@ internal sealed class WilsonHome : Control
     {Fill(g,r,Color.White,6);using(var path=WorkspaceStrip.Round(r,6))using(var p=new Pen(Color.FromArgb(207,196,187)))g.DrawPath(p,path);Fill(g,new RectangleF(r.X+10,r.Y+9,r.Width-20,5),app==0?Color.FromArgb(174,29,43):Color.FromArgb(185,128,22),1);using(var p=new Pen(Color.FromArgb(215,210,204))){for(int i=0;i<4;i++)g.DrawLine(p,r.X+10,r.Y+22+i*7,r.Right-10,r.Y+22+i*7);if(app==0)for(int i=0;i<4;i++)g.DrawLine(p,r.X+10+i*(r.Width-20)/3,r.Y+18,r.X+10+i*(r.Width-20)/3,r.Bottom-9);}}
     private void DrawModelGallery(Graphics g,float x,float y,float width)
     {
-        string[] keys={"budget","report","sales","letter"},names={"Orçamento mensal","Relatório profissional","Controle de vendas","Carta profissional"};int[] apps={0,1,0,1};int cols=width>900?3:2;float cw=(width-(cols-1)*18)/cols;int index=0;
-        for(int i=0;i<keys.Length;i++){int k=i;if(search.Text.Length>0&&names[i].IndexOf(search.Text,StringComparison.CurrentCultureIgnoreCase)<0)continue;var r=new RectangleF(x+(index%cols)*(cw+18),y+(index/cols)*204,cw,184);Card(g,r,"model"+keys[i]);Miniature(g,new RectangleF(r.X+20,r.Y+20,r.Width-40,105),apps[i]);Text(g,names[i],new RectangleF(r.X+20,r.Y+133,r.Width-40,34),17,Color.FromArgb(85,33,36),true);Hit("model"+keys[i],r,"Criar "+names[i],()=>host.OpenTemplate(apps[k],keys[k]));index++;}
-        if(index==0)Text(g,"Nenhum modelo encontrado.",new RectangleF(x,y,width,48),16,Color.DimGray);contentHeight=y+(float)Math.Ceiling(index/(double)cols)*204+30;
+        int cols=width>=1050?3:width>=610?2:1;float gap=14,cw=(width-(cols-1)*gap)/cols;bool any=false;
+        for(int app=0;app<2;app++)
+        {
+            var models=TemplateCatalog.Items.Where(m=>m.App==app&&(search.Text.Length==0||(m.Title+" "+m.Description+" "+(app==0?"Excel planilha":"Word documento")).IndexOf(search.Text,StringComparison.CurrentCultureIgnoreCase)>=0)).ToArray();
+            if(models.Length==0)continue;any=true;
+            g.DrawImage(SuiteHost.Logos[app],new RectangleF(x,y+2,28,28));
+            Text(g,app==0?"Excel AW · Planilhas":"Word AW · Documentos",new RectangleF(x+38,y,width-38,30),19,app==0?SuiteHost.Red:SuiteHost.Gold,true);y+=44;
+            int index=0;
+            foreach(var model in models)
+            {
+                var item=model;var r=new RectangleF(x+(index%cols)*(cw+gap),y+(index/cols)*156,cw,142);string id="model"+item.Key;
+                Card(g,r,id);Miniature(g,new RectangleF(r.X+16,r.Y+17,app==0?90:66,64),app);
+                float tx=r.X+(app==0?120:96);Text(g,item.Title,new RectangleF(tx,r.Y+17,r.Right-tx-14,42),15,Color.FromArgb(50,36,38),true,StringAlignment.Near,true);
+                Text(g,item.Description,new RectangleF(tx,r.Y+61,r.Right-tx-14,40),12,Color.DimGray,false,StringAlignment.Near,true);
+                Text(g,"Criar a partir deste modelo  →",new RectangleF(r.X+16,r.Bottom-32,r.Width-32,23),12,app==0?SuiteHost.Red:SuiteHost.Gold,true);
+                Hit(id,r,"Criar "+item.Title,()=>host.OpenTemplate(item.App,item.Key));FocusRing(g,id,r);index++;
+            }
+            y+=(float)Math.Ceiling(models.Length/(double)cols)*156+20;
+        }
+        if(!any)Text(g,"Nenhum modelo encontrado.",new RectangleF(x,y,width,48),16,Color.DimGray);contentHeight=y+24;
     }
+
     private void DrawSettings(Graphics g,float x,float width)
     {
         search.Visible=false;Header(g,x,width,"Do seu jeito.","Preferências do AWcontrol.");var r=new RectangleF(x,112,width,100);Card(g,r);Text(g,"Animações suaves",new RectangleF(x+24,128,width-160,30),20,Color.FromArgb(62,35,38),true);Text(g,"Transições e destaques ao passar o mouse.",new RectangleF(x+24,159,width-160,30),15,Color.DimGray);ActionButton(g,"motion",new RectangleF(r.Right-122,140,98,36),preferences.Animations?"Ativadas":"Desativadas",preferences.Animations?Color.FromArgb(155,18,34):Color.Gray,()=>{preferences.Animations=!preferences.Animations;SavePreferences();Invalidate();});

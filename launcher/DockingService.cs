@@ -1,0 +1,72 @@
+using System;
+using System.Drawing;
+using System.Diagnostics;
+using System.IO;
+using System.Collections.Generic;
+using System.Web.Script.Serialization;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Windows.Forms;
+
+// A live HWND is transferred: document data, undo, caret and scroll never leave the editor.
+// WinEvents describe actual OS window moves; an ordinary click over the central cannot dock it.
+internal sealed class DockingService : IDisposable
+{
+    private readonly SuiteHost host;private readonly WinEvent callback;private readonly IntPtr hook;
+    private EditorPage moving;private readonly Label cue;
+    private readonly Timer discovery=new Timer{Interval=1500};
+    internal DockingService(SuiteHost owner)
+    {
+        host=owner;cue=new Label{Text="Solte para devolver ao AWcontrol",AutoSize=false,TextAlign=ContentAlignment.MiddleCenter,BackColor=Color.FromArgb(147,20,37),ForeColor=Color.White,Font=new Font("Segoe UI",11,FontStyle.Bold),Visible=false,Height=38};
+        host.Controls.Add(cue);discovery.Tick+=(s,e)=>Discover();discovery.Start();callback=OnMove;hook=SetWinEventHook(0x000A,0x000B,IntPtr.Zero,callback,0,0,0);
+    }
+    private void Discover()
+    {
+        string folder=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),"AlimentosWilson","sessions");
+        try
+        {
+            if(!Directory.Exists(folder))return;
+            foreach(var path in Directory.EnumerateFiles(folder,"*.json").Take(128))
+            {
+                if(new FileInfo(path).Length>4096)continue;
+                var data=new JavaScriptSerializer{MaxJsonLength=4096,RecursionLimit=4}.DeserializeObject(File.ReadAllText(path)) as Dictionary<string,object>;
+                object pidValue,appValue,portValue,exeValue,version;
+                if(data==null||!data.TryGetValue("version",out version)||!Equals(version,1)||!data.TryGetValue("pid",out pidValue)||!(pidValue is int)||!data.TryGetValue("app",out appValue)||!(appValue is int)||!data.TryGetValue("port",out portValue)||!(portValue is int)||!data.TryGetValue("executable",out exeValue)||!(exeValue is string))continue;
+                int pid=(int)pidValue,app=(int)appValue,port=(int)portValue;if(pid<=0||app<0||app>1||port<1||port>65535||host.Pages.Concat(host.DetachedPages).Any(p=>p.Process.Id==pid))continue;
+                Process process=null;
+                try
+                {
+                    process=Process.GetProcessById(pid);if(process.HasExited||!string.Equals(process.MainModule.FileName,(string)exeValue,StringComparison.OrdinalIgnoreCase)){process.Dispose();continue;}
+                    string installed=Distribution.InstalledPath(app);if(installed==null||!string.Equals(installed,(string)exeValue,StringComparison.OrdinalIgnoreCase)){process.Dispose();continue;}
+                    IntPtr window=Native.FindWindow(pid);if(window==IntPtr.Zero||Native.GetParent(window)!=IntPtr.Zero){process.Dispose();continue;}
+                    string token=null;if(app==0){string tokenPath=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),".gridcraft","control-"+port+".token");if(!File.Exists(tokenPath)||new FileInfo(tokenPath).Length>512){process.Dispose();continue;}token=File.ReadAllText(tokenPath).Trim();}
+                    host.DetachedPages.Add(new EditorPage{App=app,Process=process,Window=window,ControlPort=port,ControlToken=token,Title=app==0?"Excel AW":"Word AW"});process=null;
+                }
+                catch(Exception error){if(!(error is ArgumentException||error is InvalidOperationException||error is System.ComponentModel.Win32Exception||error is IOException||error is UnauthorizedAccessException))throw;}
+                finally{if(process!=null)process.Dispose();}
+            }
+        }
+        catch(Exception error){if(!(error is IOException||error is UnauthorizedAccessException||error is ArgumentException||error is InvalidOperationException))throw;}
+        foreach(var page in host.DetachedPages.ToArray())if(page.Process.HasExited){host.DetachedPages.Remove(page);page.Process.Dispose();}
+    }
+    private void OnMove(IntPtr handle,uint ev,IntPtr window,int obj,int child,uint thread,uint time)
+    {
+        if(obj!=0||host.IsDisposed||!host.IsHandleCreated)return;
+        try{host.BeginInvoke((Action)(()=>
+        {
+            if(ev==0x000A){moving=host.DetachedPages.FirstOrDefault(p=>p.Window==window&&!p.Process.HasExited);if(moving!=null){cue.SetBounds(Math.Max(10,(host.ClientSize.Width-320)/2),44,320,38);cue.Visible=true;cue.BringToFront();}}
+            else if(moving!=null&&moving.Window==window)
+            {
+                var page=moving;moving=null;cue.Visible=false;
+                // Only the tab strip accepts the drop; document editing elsewhere stays unaffected.
+                if(DropBounds.Contains(Cursor.Position))Return(page);
+            }
+        }));}catch(InvalidOperationException){}
+    }
+    internal Rectangle DropBounds{get{return host.RectangleToScreen(new Rectangle(0,0,host.ClientSize.Width,80));}}
+    private async void Return(EditorPage page){await host.DockPage(page);}
+    public void Dispose(){discovery.Dispose();if(hook!=IntPtr.Zero)UnhookWinEvent(hook);cue.Dispose();}
+    private delegate void WinEvent(IntPtr hook,uint ev,IntPtr window,int obj,int child,uint thread,uint time);
+    [DllImport("user32.dll")] private static extern IntPtr SetWinEventHook(uint min,uint max,IntPtr module,WinEvent callback,uint process,uint thread,uint flags);
+    [DllImport("user32.dll")] private static extern bool UnhookWinEvent(IntPtr hook);
+}

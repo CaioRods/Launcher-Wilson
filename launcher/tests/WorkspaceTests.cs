@@ -92,8 +92,20 @@ internal static class WorkspaceTests
                         if(phase==30 && detachTask.IsCompleted)
                         {
                             Require(detachTask.Result,"detaching must preserve the running editor");Require(Native.GetParent(second.Window)==IntPtr.Zero,"detached editor must be an independent window");Require(host.Pages.Count==1,"detached document must leave the tab list");
-                            CaptureNative(second.Window,"real-word-detached");Console.WriteLine("Dirty Word detached without restarting its process");Native.PostMessage(second.Window,0x0010,IntPtr.Zero,IntPtr.Zero);phase=22;since.Restart();return;
+                            CaptureNative(second.Window,"real-word-detached");Console.WriteLine("Dirty Word detached without restarting its process");detachTask=host.DockPage(second);phase=35;since.Restart();return;
                         }
+                        if(phase==35&&detachTask.IsCompleted&&second.Attached.ElapsedMilliseconds>700)
+                        {
+                            Require(detachTask.Result&&host.Pages.Contains(second)&&Native.GetParent(second.Window)==host.Stage.Handle,"a detached Word must dock into the same host");
+                            Require(!second.Process.HasExited&&!host.DetachedPages.Contains(second),"docking must retain the live process and remove its standalone window");
+                            Native.FocusEditor(second.Window);KeyboardTest.Shortcut(0x41);KeyboardTest.Shortcut(0x43);phase=36;since.Restart();return;
+                        }
+                        if(phase==36&&since.ElapsedMilliseconds>500)
+                        {
+                            Require(Clipboard.GetText().Contains("AWCONTROLETESTE"),"Word text must survive the return to AWcontrol");Capture(host,"real-word-returned");Console.WriteLine("Dirty Word returned with the same HWND, process and typed content");
+                            detachTask=host.DetachPage(second,new Point(100,100));phase=37;since.Restart();return;
+                        }
+                        if(phase==37&&detachTask.IsCompleted){Require(detachTask.Result,"Word must detach again after return");Native.PostMessage(second.Window,0x0010,IntPtr.Zero,IntPtr.Zero);phase=22;since.Restart();return;}
                         if(phase==22 && since.ElapsedMilliseconds>800){Capture(host,"real-word-save-question");KeyboardTest.Key(0x27);phase=23;since.Restart();return;}
                         if(phase==23 && since.ElapsedMilliseconds>350){KeyboardTest.Key(0x0D);phase=4;Console.WriteLine("Discarding typed Word test document");return;}
                         if(phase==3 && since.ElapsedMilliseconds>600)
@@ -162,7 +174,11 @@ internal static class WorkspaceTests
     private static async Task<bool> VerifyRootChrome(SuiteHost host)
     {
         Native.SetForegroundWindow(host.Handle);await Task.Delay(350);KeyboardTest.RootDoubleClick(host.Handle);await Task.Delay(600);Require(host.WindowState==FormWindowState.Maximized,"actual header double-click must maximize the AWcontrol window");
-        KeyboardTest.RootDoubleClick(host.Handle);await Task.Delay(600);Require(host.WindowState==FormWindowState.Normal,"actual header double-click must restore the AWcontrol window");Console.WriteLine("Native AWcontrol double-click maximize/restore passed");return true;
+        KeyboardTest.RootDoubleClick(host.Handle);await Task.Delay(600);Require(host.WindowState==FormWindowState.Normal,"actual header double-click must restore the AWcontrol window");await VerifyResize(host.Handle);Console.WriteLine("Native AWcontrol double-click and edge resizing passed");return true;
+    }
+    private static async Task VerifyResize(IntPtr window)
+    {
+        Native.RECT before,after;Native.GetWindowRect(window,out before);KeyboardTest.ResizeStart(window);await Task.Delay(200);KeyboardTest.MoveCursor(before.Right+70,(before.Top+before.Bottom)/2);await Task.Delay(300);KeyboardTest.EndSelection();await Task.Delay(300);Native.GetWindowRect(window,out after);Require(after.Right-after.Left>before.Right-before.Left+30,"dragging a window edge must change its width");
     }
     private static async Task<bool> VerifyFixedHeaders(SuiteHost host,EditorPage first,EditorPage second)
     {
@@ -194,7 +210,7 @@ internal static class WorkspaceTests
         var strip=host.Controls.OfType<WorkspaceStrip>().Single();strip.NewFileMenu.Show(strip,Point.Empty);strip.NewFileMenu.Close();Require(!strip.NewFileMenu.IsDisposed,"new-file menu must survive close");strip.NewFileMenu.Show(strip,Point.Empty);strip.NewFileMenu.Close();
         Require(host.Home.FilteredFiles().Length==1,"search must filter real file names");host.Home.InvokeAction("favorite0");host.Home.Navigate("favorites");host.Home.SearchText="";host.Home.Refresh();Require(host.Home.FilteredFiles().Length==1,"favorites must contain only the selected file");CaptureHome(host,"home-favorites");
         host.ManageApps();host.Home.Refresh();Require(host.Home.Page=="apps","applications must be a page");Require(host.Home.Controls.OfType<Central>().Single().Visible,"application management must remain inside Home");Require(host.OwnedForms.Length==0,"applications must not open a separate window");CaptureHome(host,"applications-page");
-        host.Home.Navigate("models");host.Home.Refresh();Require(host.Home.ActionBounds("modelbudget").Width>0,"budget model must be actionable");CaptureHome(host,"home-models");
+        host.Home.Navigate("models");host.Home.Refresh();Require(host.Home.ActionBounds("modelaw_budget").Width>0,"budget model must be actionable");CaptureHome(host,"home-models");
         host.Home.Navigate("settings");host.Home.Refresh();bool before=host.Home.Animations;host.Home.InvokeAction("motion");Require(!host.Home.Animations,"reduced motion must disable transitions");host.Home.InvokeAction("motion");host.Home.Refresh();
         host.Home.Navigate("home");host.Size=new Size(720,500);host.Home.Refresh();var profile=host.Home.ActionBounds("profile");var settings=host.Home.ActionBounds("settings");Require(!profile.IntersectsWith(settings),"sidebar account and settings must not overlap at minimum height");CaptureHome(host,"home-reference-compact");
         host.Size=new Size(1000,700);host.Home.Refresh();
@@ -206,7 +222,7 @@ internal static class WorkspaceTests
         try
         {
             host.Home.Dock=DockStyle.None;strip.Dock=DockStyle.None;strip.SetBounds(0,0,1440,40);host.Home.SetBounds(0,0,1440,860);host.Home.Refresh();
-            Require(host.Home.ActionBounds("modelbudget").IsEmpty&&host.Home.ActionBounds("manage").IsEmpty,"Home must keep templates and application management off the main canvas");
+            Require(host.Home.ActionBounds("modelaw_budget").IsEmpty&&host.Home.ActionBounds("manage").IsEmpty,"Home must keep templates and application management off the main canvas");
             Require(host.Home.ActionBounds("recent").Width>0,"all recent files must remain accessible in the sidebar");
             using(var top=new Bitmap(1440,40))using(var body=new Bitmap(1440,860))using(var image=new Bitmap(1440,900))
             {strip.DrawToBitmap(top,new Rectangle(Point.Empty,top.Size));host.Home.DrawToBitmap(body,new Rectangle(Point.Empty,body.Size));using(var g=Graphics.FromImage(image)){g.Clear(Color.FromArgb(235,232,230));g.DrawImageUnscaled(top,0,0);g.DrawImageUnscaled(body,0,40);}image.Save(Path.Combine(folder,"home-reference-wide.png"));}
@@ -258,6 +274,8 @@ internal static class KeyboardTest
         Clipboard.Clear();var p=new Native.POINT{X=220,Y=310};Native.ClientToScreen(window,ref p);SetCursorPos(p.X,p.Y);
         Send(new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=2}}},new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=4}}});
     }
+    internal static void MoveCursor(int x,int y){SetCursorPos(x,y);}
+    internal static void ResizeStart(IntPtr window){Native.RECT rect;Native.GetClientRect(window,out rect);MoveTo(window,rect.Right-3,rect.Bottom/2);Send(new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=2}}});}
     private static void MoveTo(IntPtr window,int x,int y){var p=new Native.POINT{X=x,Y=y};Native.ClientToScreen(window,ref p);SetCursorPos(p.X,p.Y);}
     internal static void HeaderPress(IntPtr window){MoveTo(window,500,15);Send(new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=2}}});}
     internal static void HeaderMove(IntPtr window){MoveTo(window,580,45);}

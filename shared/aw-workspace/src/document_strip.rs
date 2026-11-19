@@ -12,6 +12,7 @@ pub enum Action {
 #[derive(Clone, Copy)]
 pub struct Style {
     pub brand: &'static str,
+    pub movable: bool,
     pub accent: Color32,
     pub active: Color32,
     pub text: Color32,
@@ -27,6 +28,7 @@ pub fn show(ui: &mut Ui, entries: &[(u64, String, bool)], accent: Color32, portu
         entries,
         Style {
             brand: "AW",
+            movable: true,
             accent,
             active: Color32::WHITE,
             text: Color32::from_gray(35),
@@ -56,10 +58,10 @@ pub fn show_with_style(ui: &mut Ui, entries: &[(u64, String, bool)], style: Styl
     let bar = Color32::from_rgb(59, 62, 72);
     egui::Panel::top("aw_documents").exact_size(32.0).frame(egui::Frame::NONE.fill(bar)).show(ui, |ui| {
         let drag = ui.interact(ui.max_rect(), ui.scope_id().with("window_drag"), Sense::click_and_drag());
-        if drag.drag_started() {
+        if style.movable && drag.drag_started() {
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
         }
-        if drag.double_clicked() {
+        if style.movable && drag.double_clicked() {
             let maximized = ui.input(|i| i.viewport().maximized.unwrap_or(false));
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Maximized(!maximized));
         }
@@ -157,7 +159,18 @@ pub fn show_with_style(ui: &mut Ui, entries: &[(u64, String, bool)], style: Styl
                                     action = Some(Action::Select(*id));
                                 }
                                 if response.drag_started() {
+                                    action = Some(Action::Select(*id));
                                     ui.ctx().data_mut(|data| data.insert_temp(drag_id, *id));
+                                }
+                                // Moving a tab out of the strip moves its live native window. AWcontrol
+                                // receives the OS move/drop and reparents it without serialising the document.
+                                if style.movable
+                                    && response.dragged()
+                                    && ui.input(|i| {
+                                        i.pointer.interact_pos().is_some_and(|p| p.y > bar_rect.bottom() + 18.0 || p.y < bar_rect.top() - 18.0)
+                                    })
+                                {
+                                    ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
                                 }
                                 if response.contains_pointer() && ui.input(|input| input.pointer.any_released()) {
                                     dropped = ui.ctx().data_mut(|data| data.get_temp::<u64>(drag_id)).map(|from| (from, *id));
@@ -311,6 +324,7 @@ mod tests {
                     &[],
                     super::Style {
                         brand: "Excel AW",
+                        movable: true,
                         accent: egui::Color32::DARK_RED,
                         active: egui::Color32::WHITE,
                         text: egui::Color32::BLACK,
