@@ -17,7 +17,7 @@ internal sealed class DockingService : IDisposable
     private readonly Timer discovery=new Timer{Interval=1500};
     private readonly Timer feedback=new Timer{Interval=100};
     private readonly ToolTip hint=new ToolTip{ShowAlways=true};
-    private bool targetHot;private Point lastHint;
+    private bool targetHot;private Point lastHint;private Native.RECT moveStart;
     internal DockingService(SuiteHost owner)
     {
         host=owner;cue=new Label{Text="Solte para devolver ao AWcontrol",AutoSize=false,TextAlign=ContentAlignment.MiddleCenter,BackColor=Color.FromArgb(147,20,37),ForeColor=Color.White,Font=new Font("Segoe UI",11,FontStyle.Bold),Visible=false,Height=38};
@@ -31,6 +31,8 @@ internal sealed class DockingService : IDisposable
             if(!Directory.Exists(folder))return;
             foreach(var path in Directory.EnumerateFiles(folder,"*.json").Take(128))
             {
+                try
+                {
                 if(new FileInfo(path).Length>4096)continue;
                 string raw=File.ReadAllText(path);
                 var data=new JavaScriptSerializer{MaxJsonLength=4096,RecursionLimit=4}.DeserializeObject(raw) as Dictionary<string,object>;
@@ -50,6 +52,8 @@ internal sealed class DockingService : IDisposable
                 }
                 catch(Exception error){if(!(error is ArgumentException||error is InvalidOperationException||error is System.ComponentModel.Win32Exception||error is IOException||error is UnauthorizedAccessException))throw;}
                 finally{if(process!=null)process.Dispose();}
+                }
+                catch(Exception error){if(!(error is IOException||error is UnauthorizedAccessException||error is ArgumentException||error is InvalidOperationException))throw;}
             }
         }
         catch(Exception error){if(!(error is IOException||error is UnauthorizedAccessException||error is ArgumentException||error is InvalidOperationException))throw;}
@@ -60,18 +64,25 @@ internal sealed class DockingService : IDisposable
         if(obj!=0||host.IsDisposed||!host.IsHandleCreated)return;
         try{host.BeginInvoke((Action)(()=>
         {
-            if(ev==0x000A){moving=host.DetachedPages.FirstOrDefault(p=>p.Window==window&&!p.Process.HasExited);if(moving!=null){cue.SetBounds(Math.Max(10,(host.ClientSize.Width-320)/2),44,320,38);targetHot=false;feedback.Start();UpdateTarget();}}
+            if(ev==0x000A){var candidate=host.DetachedPages.FirstOrDefault(p=>p.Window==window&&!p.Process.HasExited);if(candidate!=null){moving=candidate;Native.GetWindowRect(window,out moveStart);cue.SetBounds(Math.Max(10,(host.ClientSize.Width-320)/2),44,320,38);targetHot=false;feedback.Start();UpdateTarget();}}
             else if(moving!=null&&moving.Window==window)
             {
                 var page=moving;moving=null;feedback.Stop();hint.Hide(host);cue.Visible=false;
                 // Only an OS window drag can dock; ordinary editing clicks are never interpreted as drops.
-                if(DropBounds.Contains(Cursor.Position))Return(page);
+                if(IsMove(window)&&DropBounds.Contains(Cursor.Position)&&host.WindowState!=FormWindowState.Minimized)Return(page);
             }
         }));}catch(InvalidOperationException){}
     }
+    private bool IsMove(IntPtr window)
+    {
+        Native.RECT current;if(!Native.GetWindowRect(window,out current))return false;
+        // Windows emits the same move/size events for a border resize. Resizing must
+        // never adopt a document merely because its edge happens to overlap the central.
+        return current.Right-current.Left==moveStart.Right-moveStart.Left&&current.Bottom-current.Top==moveStart.Bottom-moveStart.Top&&(Math.Abs(current.Left-moveStart.Left)>3||Math.Abs(current.Top-moveStart.Top)>3);
+    }
     private void UpdateTarget()
     {
-        if(moving==null)return;bool hot=DropBounds.Contains(Cursor.Position)&&host.WindowState!=FormWindowState.Minimized;cue.Visible=hot;
+        if(moving==null)return;bool hot=IsMove(moving.Window)&&DropBounds.Contains(Cursor.Position)&&host.WindowState!=FormWindowState.Minimized;cue.Visible=hot;
         if(hot){cue.BringToFront();Point p=host.PointToClient(Cursor.Position);if(!targetHot||Math.Abs(p.X-lastHint.X)+Math.Abs(p.Y-lastHint.Y)>40){hint.Show("Solte para devolver ao AWcontrol",host,p.X+18,p.Y+24,20000);lastHint=p;}}
         else if(targetHot)hint.Hide(host);targetHot=hot;
     }
