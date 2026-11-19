@@ -31,7 +31,7 @@ internal static class WorkspaceTests
         string word=Path.Combine(folder,"relatório de teste.txt"),excel=Path.Combine(folder,"tabela de teste.csv");
         File.WriteAllText(word,"Documento de teste do AWcontrol.");File.WriteAllText(excel,"Produto,Quantidade\nTeste,3\n");
         if(!real)File.WriteAllText(word+".keep","");
-        string failure=null;int phase=0;var timeout=Stopwatch.StartNew();var since=Stopwatch.StartNew();EditorPage first=null,second=null;
+        string failure=null;int phase=0;var timeout=Stopwatch.StartNew();var since=Stopwatch.StartNew();EditorPage first=null,second=null;int dragStep=0;
         var all=new System.Collections.Generic.List<Process>();
         try
         {
@@ -72,9 +72,11 @@ internal static class WorkspaceTests
                             string copied="";try{copied=Clipboard.GetText();}catch(System.Runtime.InteropServices.ExternalException){}
                             if(!copied.Contains("AWCONTROLETESTE")&&since.ElapsedMilliseconds<5000)return;
                             Require(copied.Contains("AWCONTROLETESTE"),"a new hosted Word page must accept actual keyboard input and copy its typed text");
-                            Capture(host,"real-word-typing");Console.WriteLine("Blank hosted Word typing and clipboard passed");KeyboardTest.BeginSelection(second.Window);phase=24;since.Restart();return;
+                            Capture(host,"real-word-typing");Console.WriteLine("Blank hosted Word typing and clipboard passed");KeyboardTest.Shortcut(0x24);phase=28;since.Restart();return;
                         }
-                        if(phase==24 && since.ElapsedMilliseconds>300){KeyboardTest.EndSelection(second.Window);phase=25;since.Restart();return;}
+                        if(phase==28 && since.ElapsedMilliseconds>500){KeyboardTest.BeginSelection(second.Window);phase=24;since.Restart();return;}
+                        if(phase==24 && since.ElapsedMilliseconds>150){dragStep++;KeyboardTest.MoveSelection(second.Window,215+dragStep*57);if(dragStep==3)phase=27;since.Restart();return;}
+                        if(phase==27 && since.ElapsedMilliseconds>250){KeyboardTest.EndSelection();phase=25;since.Restart();return;}
                         if(phase==25 && since.ElapsedMilliseconds>500){KeyboardTest.Shortcut(0x43);phase=26;since.Restart();return;}
                         if(phase==26 && since.ElapsedMilliseconds>500)
                         {
@@ -214,7 +216,8 @@ internal static class KeyboardTest
         Send(new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=2}}},new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=4}}});
     }
     internal static void BeginSelection(IntPtr window){Clipboard.Clear();var p=new Native.POINT{X=215,Y=343};Native.ClientToScreen(window,ref p);SetCursorPos(p.X,p.Y);Send(new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=2}}});}
-    internal static void EndSelection(IntPtr window){var p=new Native.POINT{X=385,Y=343};Native.ClientToScreen(window,ref p);SetCursorPos(p.X,p.Y);Send(new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=4}}});}
+    internal static void MoveSelection(IntPtr window,int x){var p=new Native.POINT{X=x,Y=343};Native.ClientToScreen(window,ref p);SetCursorPos(p.X,p.Y);}
+    internal static void EndSelection(){Send(new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=4}}});}
     internal static void Type(string text){var list=new System.Collections.Generic.List<Input>();list.Add(Press(0x10,false));foreach(char c in text){list.Add(Press(c,false));list.Add(Press(c,true));}list.Add(Press(0x10,true));Send(list.ToArray());}
     internal static void Key(ushort code){Send(Press(code,false),Press(code,true));}
     internal static void Shortcut(ushort code){Send(Press(0x11,false),Press(code,false),Press(code,true),Press(0x11,true));}
