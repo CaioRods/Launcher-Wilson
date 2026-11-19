@@ -84,6 +84,8 @@ internal sealed class WilsonHome : Control
         recent.RemoveAll(p=>string.Equals(p,path,StringComparison.OrdinalIgnoreCase));recent.Insert(0,path);if(recent.Count>40)recent.RemoveRange(40,recent.Count-40);
         if(!host.Testing)SaveRecent();Invalidate();
     }
+    internal void RenameRecent(string oldPath,string newPath)
+    {if(oldPath==null||newPath==null||string.Equals(oldPath,newPath,StringComparison.OrdinalIgnoreCase))return;bool starred=Favorite(oldPath);recent.RemoveAll(p=>string.Equals(p,oldPath,StringComparison.OrdinalIgnoreCase));preferences.Favorites.RemoveAll(p=>string.Equals(p,oldPath,StringComparison.OrdinalIgnoreCase));if(starred&&!Favorite(newPath))preferences.Favorites.Add(newPath);if(starred)SavePreferences();AddRecent(newPath);}
     internal void ToggleFavorite(string path)
     {if(Favorite(path))preferences.Favorites.RemoveAll(p=>string.Equals(p,path,StringComparison.OrdinalIgnoreCase));else preferences.Favorites.Add(path);SavePreferences();Invalidate();}
     internal string[] FilteredFiles()

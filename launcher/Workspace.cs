@@ -250,10 +250,10 @@ internal sealed class SuiteHost : Form
         {
             if(Testing)Console.WriteLine(DateTime.UtcNow.ToString("O")+" Attaching editor "+page.App+" hwnd="+window);
             long style=Native.GetWindowLongPtr(window,-16).ToInt64();
-            Native.SetWindowLongPtr(window,-16,new IntPtr((style & ~0x80CF0000L) | 0x46000000L));
+            Native.SetWindowLongPtr(window,-16,new IntPtr((style & ~0x81CF0000L) | 0x46000000L));
             Native.SetParent(window,stage);int error=Marshal.GetLastWin32Error();
             long childStyle=Native.GetWindowLongPtr(window,-16).ToInt64();
-            Native.SetWindowLongPtr(window,-16,new IntPtr((childStyle & ~0x80CF0000L) | 0x46000000L));
+            Native.SetWindowLongPtr(window,-16,new IntPtr((childStyle & ~0x81CF0000L) | 0x46000000L));
             long ex=Native.GetWindowLongPtr(window,-20).ToInt64();Native.SetWindowLongPtr(window,-20,new IntPtr((ex & ~0x00040000L) | 0x00000080L));
             if(IsDisposed || !IsHandleCreated)return;
             try{BeginInvoke((Action)(()=>
@@ -272,6 +272,7 @@ internal sealed class SuiteHost : Form
     }
     private void ClosingWorkspace(object sender,FormClosingEventArgs e)
     {
+        if(Pages.Any(p=>p.Detaching||p.CommandBusy)){e.Cancel=true;Notify("Aguarde a operação do documento terminar.");return;}
         if(Home.ApplicationsBusy){e.Cancel=true;Notify("Aguarde a instalação terminar antes de fechar o AWcontrol.");return;}
         if(completeClose || Pages.Count==0)return;
         e.Cancel=true;
@@ -304,14 +305,14 @@ internal sealed class SuiteHost : Form
         if(page.CommandBusy||page.Detaching||!Pages.Contains(page))return;page.CommandBusy=true;SelectPage(page);
         try
         {
-            string name=null;
+            string name=null,previous=page.Path;
             if(action=="rename")
             {
-                var state=await EditorControl.Send(page,"state");object value;string path=state.TryGetValue("path",out value)?value as string:null;
+                var state=await EditorControl.Send(page,"state");object value;string path=state.TryGetValue("path",out value)?value as string:null;previous=path;
                 using(var dialog=new Form{Text="Renomear arquivo",FormBorderStyle=FormBorderStyle.FixedDialog,ClientSize=new Size(360,132),StartPosition=FormStartPosition.CenterParent,MinimizeBox=false,MaximizeBox=false})
                 {var field=new TextBox{Text=path==null?page.Title:Path.GetFileNameWithoutExtension(path),Bounds=new Rectangle(18,22,324,25),MaxLength=200};var save=new Button{Text="Renomear",Bounds=new Rectangle(230,77,112,32),DialogResult=DialogResult.OK};dialog.Controls.Add(field);dialog.Controls.Add(save);dialog.AcceptButton=save;if(dialog.ShowDialog(this)!=DialogResult.OK)return;name=field.Text;}
             }
-            await EditorControl.Send(page,action,name);var current=await EditorControl.Send(page,"state");object updated;if(current.TryGetValue("path",out updated)){page.Path=updated as string;if(page.Path!=null)Home.AddRecent(page.Path);}
+            await EditorControl.Send(page,action,name);var current=await EditorControl.Send(page,"state");object updated;if(current.TryGetValue("path",out updated)){page.Path=updated as string;if(page.Path!=null){if(action=="rename")Home.RenameRecent(previous,page.Path);else Home.AddRecent(page.Path);}}
             Native.FocusEditor(page.Window);
         }
         catch(Exception error){if(!(error is IOException||error is SocketException||error is AggregateException||error is InvalidOperationException))throw;Notify("Não foi possível concluir a operação no editor.");}
@@ -550,7 +551,8 @@ internal static class Native
     internal static void RoundWindow(Form form){if(!form.IsHandleCreated)return;int preference=2;int result=DwmSetWindowAttribute(form.Handle,33,ref preference,4);var old=form.Region;if(result!=0&&form.WindowState==FormWindowState.Normal&&form.Width>24&&form.Height>24){using(var path=WorkspaceStrip.Round(new RectangleF(0,0,form.Width,form.Height),10))form.Region=new Region(path);}else form.Region=null;if(old!=null)old.Dispose();}
     internal static bool Detach(IntPtr window,Rectangle bounds)
     {
-        ShowWindowAsync(window,0);SetParent(window,IntPtr.Zero);long style=GetWindowLongPtr(window,-16).ToInt64();SetWindowLongPtr(window,-16,new IntPtr((style&~0x40000000L)|0x00CF0000L));
+        ShowWindowAsync(window,0);SetParent(window,IntPtr.Zero);long style=GetWindowLongPtr(window,-16).ToInt64();SetWindowLongPtr(window,-16,new IntPtr((style&~0xC1000000L)|0x00CF0000L));
+        SetWindowLongPtr(window,-8,IntPtr.Zero); // Independent windows must not retain the workspace as owner.
         long ex=GetWindowLongPtr(window,-20).ToInt64();SetWindowLongPtr(window,-20,new IntPtr((ex&~0x00000080L)|0x00040000L));
         SetWindowPos(window,IntPtr.Zero,bounds.X,bounds.Y,bounds.Width,bounds.Height,0x4034);return GetParent(window)==IntPtr.Zero;
     }
