@@ -49,7 +49,7 @@ internal static class WorkspaceTests
                         if(phase==-1&&rootChrome.IsCompleted){Require(rootChrome.Result,"native header gestures must maximize and restore");chromeChecked=true;phase=0;return;}
                         if(phase==0)
                         {
-                            if(real&&!chromeChecked){rootChrome=VerifyRootChrome(host);phase=-1;return;}
+                            if(!chromeChecked){rootChrome=VerifyRootChrome(host);phase=-1;return;}
                             if(!real)CheckHome(host,folder);
                             Console.WriteLine("Opening editor processes");Capture(host,real?"real-home":"home");host.OpenDocument(0,null);host.OpenDocument(1,real?null:word);all.AddRange(host.Pages.Select(p=>p.Process));first=host.Pages[0];second=host.Pages[1];phase=1;Console.WriteLine("Waiting for native editor windows");return;
                         }
