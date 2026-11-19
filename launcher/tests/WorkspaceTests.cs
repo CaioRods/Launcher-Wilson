@@ -31,7 +31,7 @@ internal static class WorkspaceTests
         string word=Path.Combine(folder,"relatório de teste.txt"),excel=Path.Combine(folder,"tabela de teste.csv");
         File.WriteAllText(word,"Documento de teste do AWcontrol.");File.WriteAllText(excel,"Produto,Quantidade\nTeste,3\n");
         if(!real)File.WriteAllText(word+".keep","");
-        string failure=null;int phase=0;var timeout=Stopwatch.StartNew();var since=Stopwatch.StartNew();EditorPage first=null,second=null;int dragStep=0;Task<bool> detachTask=null;Task<bool> fixedHeaders=null;bool excelDetached=false;Task<bool> rootChrome=null;bool chromeChecked=false;
+        string failure=null;int phase=0;var timeout=Stopwatch.StartNew();var since=Stopwatch.StartNew();EditorPage first=null,second=null;int dragStep=0;Task<bool> detachTask=null;Task<bool> fixedHeaders=null;bool excelDetached=false;Task<bool> rootChrome=null;bool chromeChecked=false;Process independent=null;EditorPage imported=null;
         var all=new System.Collections.Generic.List<Process>();
         try
         {
@@ -44,7 +44,7 @@ internal static class WorkspaceTests
                 {
                     try
                     {
-                        if(timeout.Elapsed.TotalSeconds>(real?75:45))throw new Exception("Workspace test timeout at phase "+phase+"; "+host.CloseStatus);
+                        if(timeout.Elapsed.TotalSeconds>(real?110:45))throw new Exception("Workspace test timeout at phase "+phase+"; "+host.CloseStatus);
                         if(phase==6 && since.ElapsedMilliseconds>2000){Console.WriteLine("Closing: "+host.CloseStatus);since.Restart();}
                         if(phase==-1&&rootChrome.IsCompleted){Require(rootChrome.Result,"native header gestures must maximize and restore");chromeChecked=true;phase=0;return;}
                         if(phase==0)
@@ -94,7 +94,7 @@ internal static class WorkspaceTests
                             Require(detachTask.Result,"detaching must preserve the running editor");Require(Native.GetParent(second.Window)==IntPtr.Zero,"detached editor must be an independent window");Require(host.Pages.Count==1,"detached document must leave the tab list");
                             CaptureNative(second.Window,"real-word-detached");Console.WriteLine("Dirty Word detached without restarting its process");fixedHeaders=VerifyStandaloneResize(second.Window);phase=38;since.Restart();return;
                         }
-                        if(phase==38&&fixedHeaders.IsCompleted){Require(fixedHeaders.Result,"Word standalone resize must work");detachTask=host.DockPage(second);phase=35;since.Restart();return;}
+                        if(phase==38&&fixedHeaders.IsCompleted){Require(fixedHeaders.Result,"Word standalone resize must work");detachTask=DragReturn(host,second);phase=35;since.Restart();return;}
                         if(phase==35&&detachTask.IsCompleted&&second.Attached.ElapsedMilliseconds>700)
                         {
                             Require(detachTask.Result&&host.Pages.Contains(second)&&Native.GetParent(second.Window)==host.Stage.Handle,"a detached Word must dock into the same host");
@@ -118,10 +118,10 @@ internal static class WorkspaceTests
                         {
                             Require(detachTask.Result&&Native.GetParent(first.Window)==IntPtr.Zero,"Excel must detach as an independent editor");CaptureNative(first.Window,"real-excel-detached");Console.WriteLine("Excel detached without restarting its process");Native.PostMessage(first.Window,0x0010,IntPtr.Zero,IntPtr.Zero);phase=33;since.Restart();return;
                         }
-                        if(phase==33&&first.Process.HasExited)
+                        if(phase==33&&!Native.IsWindow(first.Window))
                         {host.OpenDocument(0,null);first=host.Pages[0];all.Add(first.Process);excelDetached=true;phase=34;since.Restart();return;}
                         if(phase==34&&first.Window!=IntPtr.Zero&&Native.GetParent(first.Window)==host.Stage.Handle&&first.Attached.ElapsedMilliseconds>1000){phase=4;return;}
-                        if(phase==4 && host.Pages.Count==1 && (!real||second.Process.HasExited))
+                        if(phase==4 && host.Pages.Count==1 && (!real||!Native.IsWindow(second.Window)))
                         {
                             if(real&&!excelDetached){detachTask=host.DetachPage(first,new Point(120,120));phase=32;since.Restart();return;}
 
@@ -153,7 +153,23 @@ internal static class WorkspaceTests
                         if(phase==7 && host.ActivePage!=null && host.ActivePage.Path==excel && since.ElapsedMilliseconds>200)
                         {
                             Require(host.Pages.Count==3,"reopening an existing file must activate its page without duplicates");
-                            Capture(host,"real-files");phase=6;Console.WriteLine("All file opens applied; closing suite");host.Close();return;
+                            Capture(host,"real-files");independent=Process.Start(new ProcessStartInfo(Distribution.InstalledPath(0)){UseShellExecute=false});all.Add(independent);phase=40;since.Restart();return;
+                        }
+                        if(phase==40||phase==42)
+                        {
+                            imported=host.DetachedPages.FirstOrDefault(p=>p.Process.Id==independent.Id);
+                            if(imported==null)return;
+                            Require(imported.ControlPort>0,"standalone discovery must expose the actual authenticated port");
+                            detachTask=PrepareAndReturn(host,imported);phase=phase==40?41:43;since.Restart();return;
+                        }
+                        if(phase==41&&detachTask.IsCompleted)
+                        {
+                            Require(detachTask.Result&&host.Pages.Count==4,"a separately started Excel must be discoverable and dockable");
+                            independent=Process.Start(new ProcessStartInfo(Distribution.InstalledPath(1)){UseShellExecute=false});all.Add(independent);phase=42;since.Restart();return;
+                        }
+                        if(phase==43&&detachTask.IsCompleted)
+                        {
+                            Require(detachTask.Result&&host.Pages.Count==5,"a separately started Word must be discoverable and dockable");Capture(host,"real-independent-returned");phase=6;Console.WriteLine("Normal Excel and Word discovery and actual drop passed; closing suite");host.Close();return;
                         }
                         if(phase==6 && host.IsDisposed)timer.Stop();
                     }
@@ -180,6 +196,17 @@ internal static class WorkspaceTests
     private static async Task VerifyResize(IntPtr window)
     {
         Native.RECT before,after;Native.GetWindowRect(window,out before);KeyboardTest.ResizeStart(window);await Task.Delay(200);KeyboardTest.MoveCursor(before.Right+70,(before.Top+before.Bottom)/2);await Task.Delay(300);KeyboardTest.EndSelection();await Task.Delay(300);Native.GetWindowRect(window,out after);Require(after.Right-after.Left>before.Right-before.Left+30,"dragging a window edge must change its width");
+    }
+    private static async Task<bool> PrepareAndReturn(SuiteHost host,EditorPage page)
+    {
+        Native.SetForegroundWindow(page.Window);await Task.Delay(400);KeyboardTest.Shortcut(0x4E);await Task.Delay(600);return await DragReturn(host,page);
+    }
+    private static async Task<bool> DragReturn(SuiteHost host,EditorPage page)
+    {
+        Native.SetForegroundWindow(page.Window);await Task.Delay(250);KeyboardTest.MovePress(page.Window,700,15);await Task.Delay(120);KeyboardTest.MoveClient(page.Window,740,35);await Task.Delay(250);
+        var target=host.PointToScreen(new Point(400,150));KeyboardTest.MoveCursor(target.X,target.Y);await Task.Delay(350);KeyboardTest.EndSelection();
+        for(int i=0;i<40;i++){await Task.Delay(100);if(host.Pages.Contains(page)&&!page.Attaching&&Native.GetParent(page.Window)==host.Stage.Handle){Console.WriteLine("Actual OS drag/drop returned the editor to AWcontrol");return true;}}
+        return false;
     }
     private static async Task<bool> VerifyStandaloneResize(IntPtr window){await Task.Delay(400);await VerifyResize(window);Console.WriteLine("Native editor edge resizing passed");return true;}
     private static async Task<bool> VerifyFixedHeaders(SuiteHost host,EditorPage first,EditorPage second)
@@ -280,6 +307,8 @@ internal static class KeyboardTest
     internal static void MoveCursor(int x,int y){SetCursorPos(x,y);}
     internal static void ResizeStart(IntPtr window){Native.RECT rect;Native.GetClientRect(window,out rect);MoveTo(window,rect.Right-3,rect.Bottom/2);Send(new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=2}}});}
     private static void MoveTo(IntPtr window,int x,int y){var p=new Native.POINT{X=x,Y=y};Native.ClientToScreen(window,ref p);SetCursorPos(p.X,p.Y);}
+    internal static void MoveClient(IntPtr window,int x,int y){MoveTo(window,x,y);}
+    internal static void MovePress(IntPtr window,int x,int y){MoveTo(window,x,y);Send(new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=2}}});}
     internal static void HeaderPress(IntPtr window){MoveTo(window,500,15);Send(new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=2}}});}
     internal static void HeaderMove(IntPtr window){MoveTo(window,580,45);}
     internal static void ClickAt(IntPtr window,int x,int y){MoveTo(window,x,y);Send(new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=2}}},new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=4}}});}
