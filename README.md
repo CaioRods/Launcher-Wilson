@@ -26,3 +26,19 @@ A central usa C# e Windows Forms. O workflow **Central Alimentos Wilson** compil
 A central redimensiona os editores somente quando a área disponível muda. As animações suaves ficam nas abas e nos cartões, sem movimentar a janela inteira do documento. Menus permanecem vivos durante o processamento do clique e são liberados com o controle proprietário.
 
 O nome do executável é `AWcontrol.exe`. Aplicativos abre uma página na central. Clique com o botão direito em uma aba para salvar, salvar como, renomear, destacar ou fechar. Arrastar a aba para fora mostra a indicação de janela separada; soltar destaca o mesmo editor sem recriar o documento. O cabeçalho interno dos editores é fixo enquanto hospedado. Somente a central fica na barra de tarefas nesse modo; uma janela destacada recupera o ícone do editor.
+
+
+A galeria **Modelos** separa Excel AW e Word AW e permite filtrar por aplicativo. Os modelos
+originais em pt-BR incluem orçamento, vendas, estoque, tarefas e fluxo de caixa; relatório,
+carta, ata de reunião, proposta, currículo e plano de projeto. Cada escolha cria um novo
+arquivo editável pelo motor do respectivo app.
+
+Para devolver uma janela separada, arraste-a sobre o AWcontrol e solte quando aparecer a
+indicação de retorno. Também é possível puxar uma aba nativa para mover a janela. A transferência
+mantém o processo, o conteúdo não salvo e o histórico. Se houver várias abas na janela nativa,
+o conjunto é transferido e as abas internas continuam acessíveis. As bordas permitem
+redimensionar as janelas; o ícone da central permanece sendo o do AWcontrol.
+
+As responsabilidades da central, das sessões e dos editores estão descritas na
+[arquitetura do AWcontrol](docs/architecture-awcontrol.md), incluindo o limite previsto para
+uma futura área de comunicação.

@@ -116,8 +116,9 @@ internal static class WorkspaceTests
                         }
                         if(phase==32&&detachTask.IsCompleted)
                         {
-                            Require(detachTask.Result&&Native.GetParent(first.Window)==IntPtr.Zero,"Excel must detach as an independent editor");CaptureNative(first.Window,"real-excel-detached");Console.WriteLine("Excel detached without restarting its process");Native.PostMessage(first.Window,0x0010,IntPtr.Zero,IntPtr.Zero);phase=33;since.Restart();return;
+                            Require(detachTask.Result&&Native.GetParent(first.Window)==IntPtr.Zero,"Excel must detach as an independent editor");CaptureNative(first.Window,"real-excel-detached");Console.WriteLine("Excel detached without restarting its process");fixedHeaders=VerifyStandaloneResize(first.Window);phase=44;since.Restart();return;
                         }
+                        if(phase==44&&fixedHeaders.IsCompleted){Require(fixedHeaders.Result,"Excel standalone resize must work");Native.PostMessage(first.Window,0x0010,IntPtr.Zero,IntPtr.Zero);phase=33;since.Restart();return;}
                         if(phase==33&&!Native.IsWindow(first.Window))
                         {host.OpenDocument(0,null);first=host.Pages[0];all.Add(first.Process);excelDetached=true;phase=34;since.Restart();return;}
                         if(phase==34&&first.Window!=IntPtr.Zero&&Native.GetParent(first.Window)==host.Stage.Handle&&first.Attached.ElapsedMilliseconds>1000){phase=4;return;}
@@ -195,7 +196,7 @@ internal static class WorkspaceTests
     }
     private static async Task VerifyResize(IntPtr window)
     {
-        Native.RECT before,after;Native.GetWindowRect(window,out before);KeyboardTest.ResizeStart(window);await Task.Delay(200);KeyboardTest.MoveCursor(before.Right+70,(before.Top+before.Bottom)/2);await Task.Delay(300);KeyboardTest.EndSelection();await Task.Delay(300);Native.GetWindowRect(window,out after);Require(after.Right-after.Left>before.Right-before.Left+30,"dragging a window edge must change its width");
+        Native.RECT before,after;Native.GetWindowRect(window,out before);KeyboardTest.ResizeStart(window);await Task.Delay(200);KeyboardTest.MoveCursor(before.Right-80,(before.Top+before.Bottom)/2);await Task.Delay(300);KeyboardTest.EndSelection();await Task.Delay(300);Native.GetWindowRect(window,out after);Console.WriteLine("Physical resize width: "+(before.Right-before.Left)+" → "+(after.Right-after.Left));Require(after.Right-after.Left<before.Right-before.Left-30,"dragging a window edge inward must reduce its width");
     }
     private static async Task<bool> PrepareAndReturn(SuiteHost host,EditorPage page)
     {
