@@ -161,7 +161,7 @@ internal static class WorkspaceTests
                             imported=host.DetachedPages.FirstOrDefault(p=>p.Process.Id==independent.Id);
                             if(imported==null)return;
                             Require(imported.ControlPort>0,"standalone discovery must expose the actual authenticated port");
-                            detachTask=PrepareAndReturn(host,imported);phase=phase==40?41:43;since.Restart();return;
+                            detachTask=PrepareAndReturn(host,imported,folder);phase=phase==40?41:43;since.Restart();return;
                         }
                         if(phase==41&&detachTask.IsCompleted)
                         {
@@ -198,15 +198,38 @@ internal static class WorkspaceTests
     {
         Native.RECT before,after;Native.GetWindowRect(window,out before);KeyboardTest.ResizeStart(window);await Task.Delay(200);KeyboardTest.MoveCursor(before.Right-80,(before.Top+before.Bottom)/2);await Task.Delay(300);KeyboardTest.EndSelection();await Task.Delay(300);Native.GetWindowRect(window,out after);Console.WriteLine("Physical resize width: "+(before.Right-before.Left)+" → "+(after.Right-after.Left));Require(after.Right-after.Left<before.Right-before.Left-30,"dragging a window edge inward must reduce its width");
     }
-    private static async Task<bool> PrepareAndReturn(SuiteHost host,EditorPage page)
+    private static async Task<bool> PrepareAndReturn(SuiteHost host,EditorPage page,string folder)
     {
-        Native.SetForegroundWindow(page.Window);await Task.Delay(400);KeyboardTest.Shortcut(0x4E);await Task.Delay(600);return await DragReturn(host,page);
+        Native.SetForegroundWindow(page.Window);await Task.Delay(400);if(page.App==1){KeyboardTest.Shortcut(0x4E);await Task.Delay(500);}
+        await TestCommand(page,"file.new",new{});
+        await TestCommand(page,page.App==0?"cell.set":"text.insert",page.App==0?(object)new{cell="A1",input="ABA_SELECIONADA"}:new{text="ABA_SELECIONADA"});
+        var before=await EditorControl.Send(page,"state");int count=Convert.ToInt32(before["count"]);Require(count>=2,"fixture must contain several native tabs");
+        if(!await DragReturn(host,page))return false;
+        var target=host.ActivePage;Require(target!=page&&target.Process.Id!=page.Process.Id,"only the selected document must move out of a multi-document process");
+        var remaining=await EditorControl.Send(page,"state");Require(Convert.ToInt32(remaining["count"])==count-1&&Native.GetParent(page.Window)==IntPtr.Zero,"other native tabs must remain in the original independent window");
+        string query=page.App==0?"cell.get":"document.text";object args=page.App==0?(object)new{cell="A1"}:new{};
+        var text=await TestCommand(target,query,args);Require(text.Contains("ABA_SELECIONADA"),"selected content must survive the transfer");
+        await TestCommand(target,"edit.undo",new{});text=await TestCommand(target,query,args);Require(!text.Contains("ABA_SELECIONADA"),"the transferred undo stack must restore the previous content");
+        await TestCommand(target,"edit.redo",new{});text=await TestCommand(target,query,args);Require(text.Contains("ABA_SELECIONADA"),"the transferred redo stack must remain usable");
+        await TestCommand(target,"file.save",new{path=Path.Combine(folder,"selected-"+page.App+(page.App==0?".xlsx":".docx"))});
+        Native.PostMessage(page.Window,0x0010,IntPtr.Zero,IntPtr.Zero);for(int i=0;i<50&&Native.IsWindow(page.Window);i++)await Task.Delay(100);
+        Require(!Native.IsWindow(page.Window),"the remaining clean standalone fixture must close normally");Console.WriteLine("Only selected "+page.App+" tab transferred; other tabs retained, content, undo and redo passed");return true;
     }
+    private static Task<string> TestCommand(EditorPage page,string command,object args)
+    {
+        return Task.Run(()=>
+        {
+            string key=page.ControlToken;if(page.App==1){string profile=Environment.GetEnvironmentVariable("WORDCRAFT_PROFILE_DIR")??Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),"WordCraft");key=File.ReadAllText(Path.Combine(profile,"control-key.local-"+page.ControlPort)).Trim();}
+            var json=new System.Web.Script.Serialization.JavaScriptSerializer{MaxJsonLength=1048576};
+            using(var client=new TcpClient("127.0.0.1",page.ControlPort))using(var stream=client.GetStream())using(var reader=new StreamReader(stream,Encoding.UTF8)){client.ReceiveTimeout=10000;client.SendTimeout=1000;if(page.App==0){TestWrite(stream,json.Serialize(new{id=1,method="auth",@params=new{token=key}}));reader.ReadLine();}TestWrite(stream,json.Serialize(new{id=2,key=key,method="engine.execute",@params=new{command=command,@params=args}}));string reply=reader.ReadLine();var data=json.DeserializeObject(reply) as System.Collections.Generic.Dictionary<string,object>;Require(data!=null&&!data.ContainsKey("error")&&(!data.ContainsKey("ok")||Equals(data["ok"],true)),"native fixture command failed: "+command);return reply;}
+        });
+    }
+    private static void TestWrite(Stream stream,string text){byte[] bytes=Encoding.UTF8.GetBytes(text+"\n");stream.Write(bytes,0,bytes.Length);}
     private static async Task<bool> DragReturn(SuiteHost host,EditorPage page)
     {
-        Native.SetForegroundWindow(page.Window);await Task.Delay(250);KeyboardTest.MovePress(page.Window,700,15);await Task.Delay(120);KeyboardTest.MoveClient(page.Window,740,35);await Task.Delay(250);
+        int count=host.Pages.Count;Native.SetForegroundWindow(page.Window);await Task.Delay(250);KeyboardTest.MovePress(page.Window,700,15);await Task.Delay(120);KeyboardTest.MoveClient(page.Window,740,35);await Task.Delay(250);
         var target=host.PointToScreen(new Point(400,150));KeyboardTest.MoveCursor(target.X,target.Y);await Task.Delay(350);KeyboardTest.EndSelection();
-        for(int i=0;i<40;i++){await Task.Delay(100);if(host.Pages.Contains(page)&&!page.Attaching&&Native.GetParent(page.Window)==host.Stage.Handle){Console.WriteLine("Actual OS drag/drop returned the editor to AWcontrol");return true;}}
+        for(int i=0;i<40;i++){await Task.Delay(100);if(host.Pages.Count>count&&host.ActivePage!=null&&!host.ActivePage.Attaching&&Native.GetParent(host.ActivePage.Window)==host.Stage.Handle){Console.WriteLine("Actual OS drag/drop returned the editor to AWcontrol");return true;}}
         return false;
     }
     private static async Task<bool> VerifyStandaloneResize(IntPtr window){await Task.Delay(400);await VerifyResize(window);Console.WriteLine("Native editor edge resizing passed");return true;}

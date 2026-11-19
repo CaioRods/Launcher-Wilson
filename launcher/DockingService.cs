@@ -38,7 +38,7 @@ internal sealed class DockingService : IDisposable
                 var data=new JavaScriptSerializer{MaxJsonLength=4096,RecursionLimit=4}.DeserializeObject(raw) as Dictionary<string,object>;
                 object pidValue,appValue,portValue,exeValue,version;
                 if(data==null||!data.TryGetValue("version",out version)||!Equals(version,1)||!data.TryGetValue("pid",out pidValue)||!(pidValue is int)||!data.TryGetValue("app",out appValue)||!(appValue is int)||!data.TryGetValue("port",out portValue)||!(portValue is int)||!data.TryGetValue("executable",out exeValue)||!(exeValue is string))continue;
-                int pid=(int)pidValue,app=(int)appValue,port=(int)portValue;if(Path.GetFileNameWithoutExtension(path)!=pid.ToString()||pid<=0||app<0||app>1||port<1||port>65535||host.Pages.Concat(host.DetachedPages).Any(p=>p.Process.Id==pid))continue;
+                int pid=(int)pidValue,app=(int)appValue,port=(int)portValue;if(Path.GetFileNameWithoutExtension(path)!=pid.ToString()||pid<=0||app<0||app>1||port<1||port>65535||host.Pages.Concat(host.DetachedPages).Concat(host.StagingPages).Any(p=>p.Process.Id==pid))continue;
                 Process process=null;
                 try
                 {
@@ -64,7 +64,7 @@ internal sealed class DockingService : IDisposable
         if(obj!=0||host.IsDisposed||!host.IsHandleCreated)return;
         try{host.BeginInvoke((Action)(()=>
         {
-            if(ev==0x000A){var candidate=host.DetachedPages.FirstOrDefault(p=>p.Window==window&&!p.Process.HasExited);if(candidate!=null){moving=candidate;Native.GetWindowRect(window,out moveStart);cue.SetBounds(Math.Max(10,(host.ClientSize.Width-320)/2),44,320,38);targetHot=false;feedback.Start();UpdateTarget();}}
+            if(ev==0x000A){var candidate=host.DetachedPages.FirstOrDefault(p=>p.Window==window&&!p.Process.HasExited);if(candidate!=null){moving=candidate;Native.GetWindowRect(window,out moveStart);moving.DockOrigin=Rectangle.FromLTRB(moveStart.Left,moveStart.Top,moveStart.Right,moveStart.Bottom);cue.SetBounds(Math.Max(10,(host.ClientSize.Width-320)/2),44,320,38);targetHot=false;feedback.Start();UpdateTarget();}}
             else if(moving!=null&&moving.Window==window)
             {
                 var page=moving;moving=null;feedback.Stop();hint.Hide(host);cue.Visible=false;

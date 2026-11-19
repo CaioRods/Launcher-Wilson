@@ -13,7 +13,7 @@ internal static class EditorControl
     internal static int ReservePort(){var listener=new TcpListener(IPAddress.Loopback,0);listener.Start();int port=((IPEndPoint)listener.LocalEndpoint).Port;listener.Stop();return port;}
     internal static Task<Dictionary<string,object>> Send(EditorPage page,string action,string name=null)
     {
-        if(!new[]{"state","save","saveAs","rename","detach","embed"}.Contains(action))throw new ArgumentException("Unsupported action");
+        if(!new[]{"state","save","saveAs","rename","detach","embed","export","import","commit","accept","cancel","abort"}.Contains(action))throw new ArgumentException("Unsupported action");
         return Task.Run(()=>
         {
             string key=page.ControlToken;

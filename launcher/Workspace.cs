@@ -30,6 +30,7 @@ internal sealed class EditorPage
     internal bool CloseSent, AttachFailed, Attaching, Detaching, CommandBusy, StatePending;
     internal int ControlPort;
     internal string ControlToken;
+    internal Rectangle DockOrigin=Rectangle.Empty;
     internal Size LastSize=Size.Empty;
     internal readonly Stopwatch TitleRefresh=Stopwatch.StartNew();
 }
@@ -39,6 +40,7 @@ internal sealed class SuiteHost : Form
     internal readonly List<EditorPage> Pages = new List<EditorPage>();
     internal EditorPage ActivePage;
     internal readonly List<EditorPage> DetachedPages=new List<EditorPage>();
+    internal readonly List<EditorPage> StagingPages=new List<EditorPage>();
     private readonly WindowChrome chrome;
     private readonly DockingService docking;
     internal readonly Panel Stage = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(248,248,249) };
@@ -160,6 +162,13 @@ internal sealed class SuiteHost : Form
         string exe=locate(app);
         if(exe==null){ ManageApps();return; }
         if(!Testing && Distribution.InstalledVersion(app,false)<Distribution.BundledUpdate(app).Version){ManageApps();return;}
+        var page=CreateEditor(app,path,startup);if(page==null)return;
+        Pages.Add(page);SelectPage(page);status.Text="Abrindo "+page.Title+"…";
+        if(path!=null)Home.AddRecent(path);
+    }
+    internal EditorPage CreateEditor(int app,string path=null,string startup=null)
+    {
+        string exe=locate(app);if(exe==null)return null;
         var page=new EditorPage { App=app,Path=path,Title=path==null?(app==0?"Nova planilha":"Novo documento"):System.IO.Path.GetFileName(path) };
         try
         {
@@ -171,11 +180,11 @@ internal sealed class SuiteHost : Form
             if(NativeCommands&&app==0)info.EnvironmentVariables["GRIDCRAFT_CONTROL_TOKEN"]=page.ControlToken;
             if(startup!=null)info.EnvironmentVariables["AWCONTROL_STARTUP"]=startup;
             page.Process=Process.Start(info);
-            if(page.Process==null){ status.Text="Não foi possível abrir "+Distribution.Names[app];return; }
-            Pages.Add(page);SelectPage(page);status.Text="Abrindo "+page.Title+"…";
-            if(path!=null)Home.AddRecent(path);
+            if(page.Process==null){ status.Text="Não foi possível abrir "+Distribution.Names[app];return null; }
+            return page;
         }
         catch(Exception e) { if(!(e is System.ComponentModel.Win32Exception || e is IOException || e is UnauthorizedAccessException))throw; status.Text="Não foi possível abrir "+Distribution.Names[app]+": "+e.Message; }
+        return null;
     }
     internal static string Quote(string value)
     {
@@ -277,7 +286,7 @@ internal sealed class SuiteHost : Form
     }
     private void ClosingWorkspace(object sender,FormClosingEventArgs e)
     {
-        if(Pages.Any(p=>p.Detaching||p.CommandBusy)){e.Cancel=true;Notify("Aguarde a operação do documento terminar.");return;}
+        if(StagingPages.Count>0||Pages.Concat(DetachedPages).Any(p=>p.Detaching||p.CommandBusy)){e.Cancel=true;Notify("Aguarde a operação do documento terminar.");return;}
         if(Home.ApplicationsBusy){e.Cancel=true;Notify("Aguarde a instalação terminar antes de fechar o AWcontrol.");return;}
         if(completeClose || Pages.Count==0)return;
         e.Cancel=true;
@@ -315,13 +324,21 @@ internal sealed class SuiteHost : Form
         page.Detaching=true;bool requested=false;
         try
         {
-            if(NativeCommands){var state=await EditorControl.Send(page,"state");object pid;if(state.TryGetValue("pid",out pid)&&!Equals(pid,page.Process.Id))throw new IOException("A sessão do editor mudou.");requested=true;await EditorControl.Send(page,"embed");}
+            if(NativeCommands){var state=await EditorControl.Send(page,"state");object pid,count;if(state.TryGetValue("pid",out pid)&&!Equals(pid,page.Process.Id))throw new IOException("A sessão do editor mudou.");
+                if(state.TryGetValue("count",out count)&&count is int&&(int)count>1){bool moved=await SelectedHandoff.Move(this,page,state);page.Detaching=false;return moved;}
+                requested=true;await EditorControl.Send(page,"embed");}
             DetachedPages.Remove(page);page.CloseSent=false;page.Detaching=false;page.LastSize=Size.Empty;
             page.Attached.Reset();page.Attaching=true;Pages.Add(page);SelectPage(page);AttachEditor(page,page.Window);Native.SetForegroundWindow(Handle);return true;
         }
         catch(Exception error){if(!(error is IOException||error is SocketException||error is AggregateException||error is InvalidOperationException||error is UnauthorizedAccessException||error is ArgumentException))throw;}
         if(requested){try{await EditorControl.Send(page,"detach");}catch(Exception error){if(!(error is IOException||error is SocketException||error is AggregateException||error is InvalidOperationException||error is UnauthorizedAccessException||error is ArgumentException))throw;}}
         page.Detaching=false;Notify("Não foi possível devolver a página. O editor continua aberto separadamente.");return false;
+    }
+    internal void AdoptImported(EditorPage page)
+    {
+        StagingPages.Remove(page);page.Window=Native.FindWindow(page.Process.Id);page.Attached.Reset();page.LastSize=Size.Empty;
+        Pages.Add(page);SelectPage(page);if(page.Window!=IntPtr.Zero)AttachEditor(page,page.Window);Native.SetForegroundWindow(Handle);
+        if(page.Path!=null)Home.AddRecent(page.Path);
     }
     private async void RefreshDocumentPath(EditorPage page)
     {
