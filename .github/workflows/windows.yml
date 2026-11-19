@@ -229,9 +229,9 @@ jobs:
           foreach ($app in @('Excel','Word')) {
             if (!(Test-Path "pacote/instaladores/$app-AW-x64.msi" -PathType Leaf)) { throw "MSI ausente: $app AW" }
           }
-          Compress-Archive -Path pacote/* -DestinationPath Alimentos-Wilson-Windows-x64.zip
+          Compress-Archive -Path pacote/* -DestinationPath AWcontrol-Windows-x64.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: Alimentos-Wilson-Windows-x64
-          path: Alimentos-Wilson-Windows-x64.zip
+          name: AWcontrol-Windows-x64
+          path: AWcontrol-Windows-x64.zip
           if-no-files-found: error

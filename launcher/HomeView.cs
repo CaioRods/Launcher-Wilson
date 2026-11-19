@@ -44,6 +44,8 @@ internal sealed class WilsonHome : Control
     private readonly HashSet<string> pendingDates=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     private readonly System.Threading.SemaphoreSlim dateSlots=new System.Threading.SemaphoreSlim(3);
     private Point menuPoint;
+    private Central applications;
+    internal bool ApplicationsBusy {get{return applications!=null&&applications.Busy;}}
     private string menuFile;
     internal readonly ContextMenuStrip FileActions=new ContextMenuStrip();
     internal bool Animations {get{return preferences.Animations && SystemInformation.IsMenuAnimationEnabled;}}
@@ -53,7 +55,7 @@ internal sealed class WilsonHome : Control
     internal bool Favorite(string path){return preferences.Favorites.Contains(path,StringComparer.OrdinalIgnoreCase);}
     internal WilsonHome(SuiteHost owner)
     {
-        host=owner;Dock=DockStyle.Fill;BackColor=Color.FromArgb(250,248,247);TabStop=true;AccessibleName="Início do Wilson Control";
+        host=owner;Dock=DockStyle.Fill;BackColor=Color.FromArgb(250,248,247);TabStop=true;AccessibleName="Início do AWcontrol";
         SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.OptimizedDoubleBuffer|ControlStyles.ResizeRedraw|ControlStyles.Selectable,true);
         stateFolder=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),"AlimentosWilson");
         Controls.Add(search);Controls.Add(scroll);
@@ -76,7 +78,7 @@ internal sealed class WilsonHome : Control
     private static extern IntPtr Cue(IntPtr h,int message,IntPtr w,string text);
     internal void UpdateProfile(string name,Image image)
     {name=name=="Conta"?"":name;if(person==name && avatar==image)return;person=name;avatar=image;Invalidate();}
-    internal void Navigate(string id){page=id;offset=0;hot="";focus="";search.AccessibleName=page=="models"?"Buscar modelos":"Buscar arquivos";if(search.IsHandleCreated)Cue(search.Handle,0x1501,new IntPtr(1),search.AccessibleName);Invalidate();}
+    internal void Navigate(string id){page=id;if(page=="apps"&&applications==null){applications=new Central(app=>host.OpenDocument(app,null)){Visible=false};Controls.Add(applications);}offset=0;hot="";focus="";search.AccessibleName=page=="models"?"Buscar modelos":"Buscar arquivos";if(search.IsHandleCreated)Cue(search.Handle,0x1501,new IntPtr(1),search.AccessibleName);Invalidate();}
     internal void AddRecent(string path)
     {
         recent.RemoveAll(p=>string.Equals(p,path,StringComparison.OrdinalIgnoreCase));recent.Insert(0,path);if(recent.Count>40)recent.RemoveRange(40,recent.Count-40);
@@ -109,10 +111,10 @@ internal sealed class WilsonHome : Control
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);scale=DeviceDpi/96f;var g=e.Graphics;g.SmoothingMode=SmoothingMode.AntiAlias;g.InterpolationMode=InterpolationMode.HighQualityBicubic;g.TextRenderingHint=TextRenderingHint.ClearTypeGridFit;g.ScaleTransform(scale,scale);
-        float w=ClientSize.Width/scale,h=ClientSize.Height/scale,side=w>=1100?244:208;
-        targets.Clear();groups.Clear();g.Clear(BackColor);DrawSidebar(g,side,h);
+        float w=ClientSize.Width/scale,h=ClientSize.Height/scale,side=w>=1100?176:164;
+        targets.Clear();groups.Clear();g.Clear(BackColor);DrawSidebar(g,side,h);if(applications!=null)applications.Visible=page=="apps";
         var saved=g.Save();g.SetClip(new RectangleF(side,0,Math.Max(0,w-side-12),h));g.TranslateTransform(0,-offset);mainDrawing=true;
-        float x=side+28,width=Math.Max(300,w-side-56-12);
+        float x=side+20,width=Math.Max(300,w-side-40-12);
         if(page=="settings")DrawSettings(g,x,width);
         else if(page=="profile")DrawProfile(g,x,width);
         else DrawWork(g,x,width);
@@ -122,7 +124,7 @@ internal sealed class WilsonHome : Control
         if(offset>maximum){offset=maximum;scroll.Value=maximum;Invalidate();}
     }
     private void Hit(string id,RectangleF rect,string label,Action action)
-    {if(mainDrawing)rect.Y-=offset;float side=ClientSize.Width/scale>=1100?244:208;var clip=mainDrawing?new RectangleF(side,0,ClientSize.Width/scale-side-12,ClientSize.Height/scale):new RectangleF(0,0,side,ClientSize.Height/scale);rect=RectangleF.Intersect(rect,clip);if(rect.Width>1&&rect.Height>1)targets.Add(new Target{Id=id,Rect=rect,Label=label,Action=action});}
+    {if(mainDrawing)rect.Y-=offset;float side=ClientSize.Width/scale>=1100?176:164;var clip=mainDrawing?new RectangleF(side,0,ClientSize.Width/scale-side-12,ClientSize.Height/scale):new RectangleF(0,0,side,ClientSize.Height/scale);rect=RectangleF.Intersect(rect,clip);if(rect.Width>1&&rect.Height>1)targets.Add(new Target{Id=id,Rect=rect,Label=label,Action=action});}
     private float Hot(string id){float value;return hover.TryGetValue(id,out value)?value:0;}
     private void Card(Graphics g,RectangleF r,string id=null)
     {
@@ -137,7 +139,7 @@ internal sealed class WilsonHome : Control
     private void ActionButton(Graphics g,string id,RectangleF r,string label,Color color,Action action,bool outline=false)
     {
         float amount=Hot(id);if(!outline){using(var path=WorkspaceStrip.Round(r,9))using(var brush=new LinearGradientBrush(r,ControlPaint.Light(color,0.08f+amount*0.13f),color,90))g.FillPath(brush,path);}else{Fill(g,r,Color.FromArgb((int)(amount*18),color),9);using(var path=WorkspaceStrip.Round(r,9))using(var p=new Pen(color,1.1f))g.DrawPath(p,path);}
-        Text(g,label,r,15,outline?color:Color.White,true,StringAlignment.Center);FocusRing(g,id,r);Hit(id,r,label,action);
+        Text(g,label,r,13,outline?color:Color.White,true,StringAlignment.Center);FocusRing(g,id,r);Hit(id,r,label,action);
     }
     private void Link(Graphics g,string id,RectangleF r,string label,Color color,Action action)
     {Text(g,label,r,14,color,true);if(Hot(id)>0.1f)Line(g,r.Left,r.Bottom-3,r.Right,Color.FromArgb((int)(Hot(id)*170),color));FocusRing(g,id,r);Hit(id,r,label,action);}
@@ -161,23 +163,19 @@ internal sealed class WilsonHome : Control
     }
     private void DrawSidebar(Graphics g,float w,float h)
     {
-        using(var brush=new LinearGradientBrush(new RectangleF(0,0,w,h),Color.FromArgb(164,0,25),Color.FromArgb(90,5,19),90))g.FillRectangle(brush,0,0,w,h);
-        using(var shape=new GraphicsPath()){shape.AddPolygon(new[]{new PointF(0,h*.25f),new PointF(w,h*.12f),new PointF(w,h*.5f),new PointF(0,h*.83f)});using(var b=new SolidBrush(Color.FromArgb(17,255,96,94)))g.FillPath(b,shape);}
-        using(var wave=new GraphicsPath()){wave.AddBezier(0,h-9,w*.35f,h-38,w*.6f,h-12,w,h-35);wave.AddLine(w,h-35,w,h);wave.AddLine(w,h,0,h);wave.CloseFigure();using(var b=new LinearGradientBrush(new RectangleF(0,h-38,w,38),Color.FromArgb(255,201,48),Color.FromArgb(225,137,11),0f))g.FillPath(b,wave);}
-        float logo=w>220?76:60;g.DrawImage(SuiteHost.Brand,14,24,logo,48);Text(g,"Wilson Control",new RectangleF(22+logo,26,w-logo-32,42),w>220?17:14,Color.White,true);
+        using(var brush=new LinearGradientBrush(new RectangleF(0,0,w,h),Color.FromArgb(155,15,34),Color.FromArgb(91,12,27),90))g.FillRectangle(brush,0,0,w,h);
+        g.DrawImage(SuiteHost.Brand,16,16,40,26);Text(g,"AWcontrol",new RectangleF(64,13,w-72,32),14,Color.White,true);
         string[] ids={"home","recent","favorites","models"},labels={"Início","Recentes","Favoritos","Modelos"},icons={"home","recent","star","file"};
-        float navStart=h<640?96:110,step=h<560?37:h<640?42:50;
-        for(int i=0;i<ids.Length;i++)Nav(g,w,navStart+i*step,ids[i],labels[i],icons[i]);
-        float bottom=Math.Max(navStart+step*4+2,h-250);Line(g,24,bottom,w-24,Color.FromArgb(70,255,255,255));
-        Nav(g,w,bottom+14,"apps","Aplicativos","apps");Nav(g,w,bottom+64,"settings","Configurações","settings");Line(g,24,bottom+125,w-24,Color.FromArgb(70,255,255,255));
-        var profile=new RectangleF(14,h-108,w-28,72);Fill(g,profile,Color.FromArgb(45+(int)(Hot("profile")*24),255,255,255),12);
-        DrawAvatar(g,new RectangleF(26,h-93,40,40));Text(g,string.IsNullOrWhiteSpace(person)?"Minha conta":person,new RectangleF(78,h-96,w-98,28),14,Color.White,true);Text(g,"Conta pessoal",new RectangleF(78,h-69,w-98,20),12,Color.FromArgb(240,223,219));Hit("profile",profile,"Conta pessoal",()=>Navigate("profile"));FocusRing(g,"profile",profile);
+        for(int i=0;i<ids.Length;i++)Nav(g,w,70+i*38,ids[i],labels[i],icons[i]);
+        float bottom=Math.Max(232,h-196);Line(g,16,bottom,w-16,Color.FromArgb(50,255,255,255));Nav(g,w,bottom+12,"apps","Aplicativos","apps");Nav(g,w,bottom+50,"settings","Configurações","settings");
+        var profile=new RectangleF(10,h-88,w-20,60);Fill(g,profile,Color.FromArgb(28+(int)(Hot("profile")*18),255,255,255),8);
+        DrawAvatar(g,new RectangleF(20,h-75,30,30));Text(g,string.IsNullOrWhiteSpace(person)?"Minha conta":person,new RectangleF(60,h-79,w-70,23),12,Color.White,true);Text(g,"Conta",new RectangleF(60,h-57,w-70,18),11,Color.FromArgb(240,223,219));Hit("profile",profile,"Conta pessoal",()=>Navigate("profile"));FocusRing(g,"profile",profile);
     }
     private void Nav(Graphics g,float w,float y,string id,string label,string icon)
     {
-        float rowHeight=ClientSize.Height/scale<560?34:42;bool selected=page==id;var r=new RectangleF(14,y,w-28,rowHeight);float alpha=(selected?50:0)+Hot(id)*24;
-        if(alpha>0)Fill(g,r,Color.FromArgb((int)alpha,255,255,255),10);if(selected)Fill(g,new RectangleF(14,y+6,4,rowHeight-12),Color.FromArgb(255,201,48),2);
-        Icon(g,icon,new RectangleF(34,y+(rowHeight-21)/2,21,21),selected?Color.FromArgb(255,219,137):Color.White);Text(g,label,new RectangleF(72,y,w-90,rowHeight),16,Color.White,selected);
+        bool selected=page==id;var r=new RectangleF(10,y,w-20,32);float alpha=(selected?42:0)+Hot(id)*20;
+        if(alpha>0)Fill(g,r,Color.FromArgb((int)alpha,255,255,255),8);if(selected)Fill(g,new RectangleF(10,y+6,3,20),Color.FromArgb(255,201,48),2);
+        Icon(g,icon,new RectangleF(23,y+7,17,17),selected?Color.FromArgb(255,219,137):Color.White);Text(g,label,new RectangleF(52,y,w-60,32),13,Color.White,selected);
         Hit(id,r,label,()=>{if(id=="apps")host.ManageApps();else Navigate(id);});FocusRing(g,id,r);
     }
     private void DrawAvatar(Graphics g,RectangleF r)
@@ -186,44 +184,45 @@ internal sealed class WilsonHome : Control
     }
     private void Header(Graphics g,float x,float width,string title,string subtitle)
     {
-        Text(g,title,new RectangleF(x,20,width,48),34,Color.FromArgb(24,24,27),true);Text(g,subtitle,new RectangleF(x,64,width,28),18,Color.FromArgb(103,102,105),true);
+        Text(g,title,new RectangleF(x,16,width,36),26,Color.FromArgb(24,24,27),true);Text(g,subtitle,new RectangleF(x,52,width,24),14,Color.FromArgb(103,102,105),true);
     }
     private float SearchBox(Graphics g,float x,float width)
     {
-        float boxWidth=width>980?Math.Min(450,width*.46f):width;float y=width>980?28:104;float left=width>980?x+width-boxWidth:x;
-        var r=new RectangleF(left,y,boxWidth,44);Fill(g,new RectangleF(left,y+3,boxWidth,44),Color.FromArgb(15,60,24,20),12);Fill(g,r,Color.White,12);
-        using(var path=WorkspaceStrip.Round(r,12))using(var p=new Pen(Color.FromArgb(195,190,187)))g.DrawPath(p,path);Icon(g,"search",new RectangleF(left+15,y+12,19,19),Color.DimGray);
-        search.Visible= y-offset>=0 && y-offset+44<ClientSize.Height/scale;
-        search.SetBounds((int)((left+44)*scale),(int)((y+11-offset)*scale),(int)((boxWidth-58)*scale),(int)(24*scale));
-        return width>980?108:166;
+        float boxWidth=width>860?Math.Min(340,width*.44f):width;float y=width>860?20:86;float left=width>860?x+width-boxWidth:x;
+        var r=new RectangleF(left,y,boxWidth,36);Fill(g,new RectangleF(left,y+2,boxWidth,36),Color.FromArgb(15,60,24,20),12);Fill(g,r,Color.White,12);
+        using(var path=WorkspaceStrip.Round(r,12))using(var p=new Pen(Color.FromArgb(195,190,187)))g.DrawPath(p,path);Icon(g,"search",new RectangleF(left+12,y+10,16,16),Color.DimGray);
+        search.Visible= y-offset>=0 && y-offset+36<ClientSize.Height/scale;
+        search.SetBounds((int)((left+36)*scale),(int)((y+7-offset)*scale),(int)((boxWidth-46)*scale),(int)(24*scale));
+        return width>860?92:138;
     }
     private void DrawWork(Graphics g,float x,float width)
     {
+        if(page=="apps"){search.Visible=false;Header(g,x,width,"Aplicativos","Abra seus apps ou mantenha-os atualizados.");if(applications!=null){applications.SetBounds((int)(x*scale),(int)((96-offset)*scale),(int)(width*scale),(int)(320*scale));applications.Visible=true;}contentHeight=436;return;}
         string first=person.Split(new[]{' '},StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();int hour=DateTime.Now.Hour;string greeting=(hour<12?"Bom dia":hour<18?"Boa tarde":"Boa noite")+(first==null?".":", "+first+".");
-        Header(g,x,width>980?width-Math.Min(450,width*.46f)-24:width,page=="home"?greeting:page=="models"?"Modelos para começar.":page=="favorites"?"Seus favoritos.":"Arquivos recentes.","Crie ou abra um arquivo.");
+        Header(g,x,width>860?width-Math.Min(340,width*.44f)-24:width,page=="home"?greeting:page=="models"?"Modelos para começar.":page=="favorites"?"Seus favoritos.":"Arquivos recentes.","Crie ou abra um arquivo.");
         float top=SearchBox(g,x,width);
         if(page=="models"){DrawModelGallery(g,x,top,width);return;}
         if(page!="home"){float height=DrawRecent(g,x,top,width,false);contentHeight=top+height+30;return;}
         bool pair=width>=690;float cardWidth=pair?(width-18)/2:width;
-        AppCard(g,new RectangleF(x,top,cardWidth,118),0);AppCard(g,new RectangleF(pair?x+cardWidth+18:x,pair?top:top+134,cardWidth,118),1);
-        float rowsY=top+(pair?142:276);float rowsH=DrawRecent(g,x,rowsY,width,true);
+        AppCard(g,new RectangleF(x,top,cardWidth,100),0);AppCard(g,new RectangleF(pair?x+cardWidth+18:x,pair?top:top+112,cardWidth,100),1);
+        float rowsY=top+(pair?120:232);float rowsH=DrawRecent(g,x,rowsY,width,true);
         contentHeight=rowsY+rowsH+30;
     }
     private void AppCard(Graphics g,RectangleF r,int app)
     {
         string id="app"+app;var group=r;group.Y-=offset;groups[id]=group;float lift=Animations?Hot(id):0;r.Y-=lift;Card(g,r,id);
-        float left=r.X+88;Color accent=app==0?Color.FromArgb(170,8,33):Color.FromArgb(168,111,8);
-        g.DrawImage(SuiteHost.Logos[app],r.X+22,r.Y+17,48,48);
-        Text(g,Distribution.Names[app],new RectangleF(left,r.Y+16,r.Width-110,34),25,Color.FromArgb(28,26,27),true);
+        float left=r.X+76;Color accent=app==0?Color.FromArgb(170,8,33):Color.FromArgb(168,111,8);
+        g.DrawImage(SuiteHost.Logos[app],r.X+18,r.Y+14,40,40);
+        Text(g,Distribution.Names[app],new RectangleF(left,r.Y+16,r.Width-94,30),21,Color.FromArgb(28,26,27),true);
         float actionWidth=r.Width-40,buttonWidth=Math.Min(186,actionWidth*.57f);
-        ActionButton(g,id+"new",new RectangleF(r.X+20,r.Y+68,buttonWidth,34),app==0?"Nova planilha":"Novo documento",accent,()=>host.OpenDocument(app,null));
-        Link(g,id+"open",new RectangleF(r.X+buttonWidth+32,r.Y+68,actionWidth-buttonWidth-12,34),app==0?"Abrir planilha":"Abrir documento",accent,()=>host.OpenPicker(app));
+        ActionButton(g,id+"new",new RectangleF(r.X+20,r.Y+58,buttonWidth,30),app==0?"Nova planilha":"Novo documento",accent,()=>host.OpenDocument(app,null));
+        Link(g,id+"open",new RectangleF(r.X+buttonWidth+32,r.Y+58,actionWidth-buttonWidth-12,30),app==0?"Abrir planilha":"Abrir documento",accent,()=>host.OpenPicker(app));
     }
 
     private float DrawRecent(Graphics g,float x,float y,float width,bool compact)
     {
-        var files=FilteredFiles();int count=compact?Math.Min(files.Length,preferences.Grid?4:5):files.Length;float body=preferences.Grid?Math.Max(154,(float)Math.Ceiling(count/(width>=700?3f:2f))*132):Math.Max(168,count*40+44);float height=body+60;
-        var r=new RectangleF(x,y,width,height);Card(g,r);Icon(g,"folder",new RectangleF(x+18,y+19,23,20),Color.FromArgb(103,29,33));Text(g,page=="favorites"?"Favoritos":"Arquivos recentes",new RectangleF(x+54,y+8,width-230,42),22,Color.FromArgb(29,25,27),true);
+        var files=FilteredFiles();int count=compact?Math.Min(files.Length,preferences.Grid?4:5):files.Length;float body=preferences.Grid?Math.Max(154,(float)Math.Ceiling(count/(width>=700?3f:2f))*132):Math.Max(168,count*34+38);float height=body+60;
+        var r=new RectangleF(x,y,width,height);Card(g,r);Icon(g,"folder",new RectangleF(x+18,y+19,23,20),Color.FromArgb(103,29,33));Text(g,page=="favorites"?"Favoritos":"Arquivos recentes",new RectangleF(x+54,y+8,width-230,42),18,Color.FromArgb(29,25,27),true);
         Link(g,"openfile",new RectangleF(x+width-220,y+12,116,32),"Abrir arquivo",Color.FromArgb(130,18,33),()=>host.OpenPicker());
         foreach(bool grid in new[]{false,true}){bool choice=grid;var rect=new RectangleF(x+width-(grid?44:80),y+15,28,28);if(preferences.Grid==grid||Hot(grid?"grid":"list")>0)Fill(g,rect,Color.FromArgb(247,231,231),6);Icon(g,grid?"grid":"list",new RectangleF(rect.X+6,rect.Y+6,16,16),Color.FromArgb(125,35,41));Hit(grid?"grid":"list",rect,grid?"Exibir em grade":"Exibir em lista",()=>{preferences.Grid=choice;SavePreferences();Invalidate();});}
         if(count==0){Text(g,search.Text.Length>0?"Nenhum arquivo encontrado.":page=="favorites"?"Marque a estrela de um arquivo para salvá-lo aqui.":"Os arquivos que você abrir aparecerão aqui.",new RectangleF(x+24,y+89,width-48,48),15,Color.FromArgb(117,111,111));return height;}
@@ -238,11 +237,11 @@ internal sealed class WilsonHome : Control
             Text(g,"Nome",new RectangleF(x+30,y+56,nameWidth-20,32),13,Color.FromArgb(91,87,88),true);Text(g,"Local",new RectangleF(x+nameWidth,y+56,localWidth,32),13,Color.FromArgb(91,87,88),true);if(width>=620)Text(g,"Modificado",new RectangleF(x+nameWidth+localWidth,y+56,width*.2f,32),13,Color.FromArgb(91,87,88),true);
             for(int i=0;i<count;i++)
             {
-                string path=files[i];float row=y+91+i*40;var rect=new RectangleF(x+16,row,width-32,38);if(Hot("file"+i)>0)Fill(g,rect,Color.FromArgb((int)(Hot("file"+i)*23),164,30,33),6);
-                g.DrawImage(SuiteHost.Logos[SuiteHost.Kind(path)],x+29,row+7,24,24);Text(g,Path.GetFileName(path),new RectangleF(x+63,row,nameWidth-75,38),14,Color.FromArgb(43,37,38),true);Text(g,Folder(path),new RectangleF(x+nameWidth,row,localWidth-12,38),13,Color.FromArgb(102,96,96));if(width>=620)Text(g,Modified(path),new RectangleF(x+nameWidth+localWidth,row,width*.2f-24,38),13,Color.FromArgb(102,96,96));
+                string path=files[i];float row=y+88+i*34;var rect=new RectangleF(x+16,row,width-32,32);if(Hot("file"+i)>0)Fill(g,rect,Color.FromArgb((int)(Hot("file"+i)*23),164,30,33),6);
+                g.DrawImage(SuiteHost.Logos[SuiteHost.Kind(path)],x+29,row+7,24,24);Text(g,Path.GetFileName(path),new RectangleF(x+63,row,nameWidth-75,32),12,Color.FromArgb(43,37,38),true);Text(g,Folder(path),new RectangleF(x+nameWidth,row,localWidth-12,32),11,Color.FromArgb(102,96,96));if(width>=620)Text(g,Modified(path),new RectangleF(x+nameWidth+localWidth,row,width*.2f-24,32),11,Color.FromArgb(102,96,96));
                 Hit("file"+i,new RectangleF(rect.X,rect.Y,rect.Width-78,rect.Height),"Abrir "+Path.GetFileName(path),()=>host.OpenDocument(SuiteHost.Kind(path),path));FocusRing(g,"file"+i,rect);
                 var star=new RectangleF(x+width-86,row+4,30,30);Text(g,Favorite(path)?"★":"☆",star,24,Favorite(path)?Color.FromArgb(199,137,8):Color.FromArgb(114,106,107),false,StringAlignment.Center);Hit("favorite"+i,star,(Favorite(path)?"Remover dos favoritos: ":"Favoritar: ")+Path.GetFileName(path),()=>ToggleFavorite(path));
-                var more=new RectangleF(x+width-49,row+4,30,30);Text(g,"···",more,23,Color.FromArgb(89,79,80),true,StringAlignment.Center);Hit("more"+i,more,"Mais opções: "+Path.GetFileName(path),()=>FileMenu(path));Line(g,x+25,row+39,x+width-25,Color.FromArgb(239,234,231));
+                var more=new RectangleF(x+width-49,row+4,30,30);Text(g,"···",more,23,Color.FromArgb(89,79,80),true,StringAlignment.Center);Hit("more"+i,more,"Mais opções: "+Path.GetFileName(path),()=>FileMenu(path));Line(g,x+25,row+33,x+width-25,Color.FromArgb(239,234,231));
             }
         }
         return height;
@@ -277,7 +276,7 @@ internal sealed class WilsonHome : Control
     }
     private void DrawSettings(Graphics g,float x,float width)
     {
-        search.Visible=false;Header(g,x,width,"Do seu jeito.","Preferências do Wilson Control.");var r=new RectangleF(x,112,width,100);Card(g,r);Text(g,"Animações suaves",new RectangleF(x+24,128,width-160,30),20,Color.FromArgb(62,35,38),true);Text(g,"Transições e destaques ao passar o mouse.",new RectangleF(x+24,159,width-160,30),15,Color.DimGray);ActionButton(g,"motion",new RectangleF(r.Right-122,140,98,36),preferences.Animations?"Ativadas":"Desativadas",preferences.Animations?Color.FromArgb(155,18,34):Color.Gray,()=>{preferences.Animations=!preferences.Animations;SavePreferences();Invalidate();});
+        search.Visible=false;Header(g,x,width,"Do seu jeito.","Preferências do AWcontrol.");var r=new RectangleF(x,112,width,100);Card(g,r);Text(g,"Animações suaves",new RectangleF(x+24,128,width-160,30),20,Color.FromArgb(62,35,38),true);Text(g,"Transições e destaques ao passar o mouse.",new RectangleF(x+24,159,width-160,30),15,Color.DimGray);ActionButton(g,"motion",new RectangleF(r.Right-122,140,98,36),preferences.Animations?"Ativadas":"Desativadas",preferences.Animations?Color.FromArgb(155,18,34):Color.Gray,()=>{preferences.Animations=!preferences.Animations;SavePreferences();Invalidate();});
         var list=new RectangleF(x,232,width,118);Card(g,list);Text(g,"Exibição de arquivos",new RectangleF(x+24,244,width-48,35),20,Color.FromArgb(62,35,38),true);ActionButton(g,"settinglist",new RectangleF(x+24,293,155,36),"Lista",Color.FromArgb(139,20,35),()=>{preferences.Grid=false;SavePreferences();Invalidate();},preferences.Grid);ActionButton(g,"settinggrid",new RectangleF(x+194,293,155,36),"Grade",Color.FromArgb(139,20,35),()=>{preferences.Grid=true;SavePreferences();Invalidate();},!preferences.Grid);contentHeight=390;
     }
     private void DrawProfile(Graphics g,float x,float width)

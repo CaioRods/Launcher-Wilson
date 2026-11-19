@@ -1,7 +1,7 @@
 AWCONTROL · ALIMENTOS WILSON
 
-1. Extraia os ZIPs até encontrar Alimentos Wilson.exe e a pasta instaladores.
-2. Abra Alimentos Wilson.exe: a Home permite criar planilhas e documentos.
+1. Extraia os ZIPs até encontrar AWcontrol.exe e a pasta instaladores.
+2. Abra AWcontrol.exe: a Home permite criar planilhas e documentos.
 3. Use Aplicativos ou Gerenciar aplicativos para instalar/atualizar os dois apps.
 4. Crie uma planilha ou documento, abra arquivos, busque recentes ou escolha modelos.
 

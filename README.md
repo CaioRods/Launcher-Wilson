@@ -1,4 +1,4 @@
-# Wilson Control · AWcontrol
+# AWcontrol
 
 Aplicativo Windows para trabalhar com planilhas do Excel AW e documentos do Word AW em abas na mesma janela, além de instalar e atualizar os dois editores. Créditos: @CaioRods. A identidade visual utiliza o logotipo da [Alimentos Wilson](https://www.alimentoswilson.com.br/); as origens dos recursos estão em [ATTRIBUTION.md](launcher/assets/ATTRIBUTION.md).
 
@@ -7,7 +7,7 @@ A Home mostra as ações de criar/abrir e uma lista curta de arquivos recentes, 
 ## Instalação
 
 1. Baixe o ZIP em [Releases](https://github.com/CaioRods/Launcher-Wilson/releases) e extraia todo o conteúdo.
-2. Abra **Alimentos Wilson.exe**.
+2. Abra **AWcontrol.exe**.
 3. Acesse **Aplicativos** ou **Gerenciar aplicativos** para instalar as versões incluídas. Após a instalação, os botões passam a **Abrir**. Uma atualização encontrada oferece **Atualizar**. Instalações existentes são reconhecidas também ao reabrir a central.
 4. Na Home, escolha **Nova planilha**, **Novo documento** ou abra um arquivo existente.
 

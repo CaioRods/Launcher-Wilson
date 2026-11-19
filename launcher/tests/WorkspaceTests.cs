@@ -31,7 +31,7 @@ internal static class WorkspaceTests
         string word=Path.Combine(folder,"relatório de teste.txt"),excel=Path.Combine(folder,"tabela de teste.csv");
         File.WriteAllText(word,"Documento de teste do AWcontrol.");File.WriteAllText(excel,"Produto,Quantidade\nTeste,3\n");
         if(!real)File.WriteAllText(word+".keep","");
-        string failure=null;int phase=0;var timeout=Stopwatch.StartNew();var since=Stopwatch.StartNew();EditorPage first=null,second=null;int dragStep=0;
+        string failure=null;int phase=0;var timeout=Stopwatch.StartNew();var since=Stopwatch.StartNew();EditorPage first=null,second=null;int dragStep=0;Task<bool> detachTask=null;
         var all=new System.Collections.Generic.List<Process>();
         try
         {
@@ -39,7 +39,7 @@ internal static class WorkspaceTests
             using(var broker=new WorkspaceBroker(host))
             using(var timer=new Timer { Interval=100 })
             {
-                host.StartPosition=FormStartPosition.Manual;host.Location=Point.Empty;host.Size=new Size(1000,700);
+                host.NativeCommands=real;host.StartPosition=FormStartPosition.Manual;host.Location=Point.Empty;host.Size=new Size(1000,700);
                 timer.Tick+=(s,e)=>
                 {
                     try
@@ -83,7 +83,12 @@ internal static class WorkspaceTests
                             string copied="";try{copied=Clipboard.GetText();}catch(System.Runtime.InteropServices.ExternalException){}
                             if(!copied.Contains("CONTROLE")&&since.ElapsedMilliseconds<5000)return;
                             Capture(host,"real-word-mouse-selection");Require(copied.Contains("CONTROLE"),"mouse drag must select editable Word text after switching tabs");
-                            Console.WriteLine("Hosted Word mouse selection and copy passed");host.ClosePage(second);phase=22;since.Restart();return;
+                            Console.WriteLine("Hosted Word mouse selection and copy passed");detachTask=host.DetachPage(second,new Point(100,100));phase=30;since.Restart();return;
+                        }
+                        if(phase==30 && detachTask.IsCompleted)
+                        {
+                            Require(detachTask.Result,"detaching must preserve the running editor");Require(Native.GetParent(second.Window)==IntPtr.Zero,"detached editor must be an independent window");Require(host.Pages.Count==1,"detached document must leave the tab list");
+                            CaptureNative(second.Window,"real-word-detached");Console.WriteLine("Dirty Word detached without restarting its process");Native.PostMessage(second.Window,0x0010,IntPtr.Zero,IntPtr.Zero);phase=22;since.Restart();return;
                         }
                         if(phase==22 && since.ElapsedMilliseconds>800){Capture(host,"real-word-save-question");KeyboardTest.Key(0x27);phase=23;since.Restart();return;}
                         if(phase==23 && since.ElapsedMilliseconds>350){KeyboardTest.Key(0x0D);phase=4;Console.WriteLine("Discarding typed Word test document");return;}
@@ -92,7 +97,7 @@ internal static class WorkspaceTests
                             if(!real){Require(!second.Process.HasExited,"Cancel must keep the editor and its document alive");File.Delete(word+".keep");host.ClosePage(second);}
                             phase=4;Console.WriteLine("Closing initial Word page");return;
                         }
-                        if(phase==4 && host.Pages.Count==1)
+                        if(phase==4 && host.Pages.Count==1 && (!real||second.Process.HasExited))
                         {
                             // Same path through the live broker as a second AWcontrol invocation.
                             var send=Task.Run(()=>WorkspaceBroker.Forward(new[]{excel,word}));
@@ -144,6 +149,8 @@ internal static class WorkspaceTests
     private static void CheckHome(SuiteHost host,string folder)
     {
         host.MaximumSize=new Size(4096,4096);host.Size=new Size(1440,900);
+        Require(host.Stage.Left==host.Stage.Top&&host.Stage.Left==host.Stage.Parent.ClientSize.Width-host.Stage.Right&&host.Stage.Top==host.Stage.Parent.ClientSize.Height-host.Stage.Bottom,"document frame must have equal spacing on all four sides");
+        var header=host.Controls.OfType<WorkspaceStrip>().Single();var down=typeof(WorkspaceStrip).GetMethod("OnMouseDown",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic);down.Invoke(header,new object[]{new MouseEventArgs(MouseButtons.Left,2,80,16,0)});Require(host.WindowState==FormWindowState.Maximized,"double-clicking header must maximize");down.Invoke(header,new object[]{new MouseEventArgs(MouseButtons.Left,2,80,16,0)});Require(host.WindowState==FormWindowState.Normal,"double-clicking header again must restore");
         string[] names={"TOPS SANKHYA.xlsx","Relatório mensal.docx","Controle de estoque.xlsx","Proposta comercial.docx"};
         foreach(string name in names){string path=Path.Combine(folder,name);File.WriteAllText(path,"Home fixture");host.Home.AddRecent(path);}
         host.Home.UpdateProfile("Caio Rodrigues",null);host.Refresh();host.Home.Refresh();
@@ -155,9 +162,10 @@ internal static class WorkspaceTests
         host.Home.InvokeAction("more0");menu.Items[1].PerformClick();menu.Close();Require(!menu.IsDisposed,"recent-file menu must reopen after an action");
         var strip=host.Controls.OfType<WorkspaceStrip>().Single();strip.NewFileMenu.Show(strip,Point.Empty);strip.NewFileMenu.Close();Require(!strip.NewFileMenu.IsDisposed,"new-file menu must survive close");strip.NewFileMenu.Show(strip,Point.Empty);strip.NewFileMenu.Close();
         Require(host.Home.FilteredFiles().Length==1,"search must filter real file names");host.Home.InvokeAction("favorite0");host.Home.Navigate("favorites");host.Home.SearchText="";host.Home.Refresh();Require(host.Home.FilteredFiles().Length==1,"favorites must contain only the selected file");CaptureHome(host,"home-favorites");
+        host.ManageApps();host.Home.Refresh();Require(host.Home.Page=="apps","applications must be a page");Require(host.Home.Controls.OfType<Central>().Single().Visible,"application management must remain inside Home");Require(host.OwnedForms.Length==0,"applications must not open a separate window");CaptureHome(host,"applications-page");
         host.Home.Navigate("models");host.Home.Refresh();Require(host.Home.ActionBounds("modelbudget").Width>0,"budget model must be actionable");CaptureHome(host,"home-models");
         host.Home.Navigate("settings");host.Home.Refresh();bool before=host.Home.Animations;host.Home.InvokeAction("motion");Require(!host.Home.Animations,"reduced motion must disable transitions");host.Home.InvokeAction("motion");host.Home.Refresh();
-        host.Home.Navigate("home");host.Size=new Size(820,560);host.Home.Refresh();var profile=host.Home.ActionBounds("profile");var settings=host.Home.ActionBounds("settings");Require(!profile.IntersectsWith(settings),"sidebar account and settings must not overlap at minimum height");CaptureHome(host,"home-reference-compact");
+        host.Home.Navigate("home");host.Size=new Size(720,500);host.Home.Refresh();var profile=host.Home.ActionBounds("profile");var settings=host.Home.ActionBounds("settings");Require(!profile.IntersectsWith(settings),"sidebar account and settings must not overlap at minimum height");CaptureHome(host,"home-reference-compact");
         host.Size=new Size(1000,700);host.Home.Refresh();
     }
     private static void CaptureWideHome(SuiteHost host)
@@ -166,13 +174,17 @@ internal static class WorkspaceTests
         var strip=host.Controls.OfType<WorkspaceStrip>().Single();var homeBounds=host.Home.Bounds;var stripBounds=strip.Bounds;
         try
         {
-            host.Home.Dock=DockStyle.None;strip.Dock=DockStyle.None;strip.SetBounds(0,0,1440,48);host.Home.SetBounds(0,0,1440,852);host.Home.Refresh();
+            host.Home.Dock=DockStyle.None;strip.Dock=DockStyle.None;strip.SetBounds(0,0,1440,36);host.Home.SetBounds(0,0,1424,848);host.Home.Refresh();
             Require(host.Home.ActionBounds("modelbudget").IsEmpty&&host.Home.ActionBounds("manage").IsEmpty,"Home must keep templates and application management off the main canvas");
             Require(host.Home.ActionBounds("recent").Width>0,"all recent files must remain accessible in the sidebar");
-            using(var top=new Bitmap(1440,48))using(var body=new Bitmap(1440,852))using(var image=new Bitmap(1440,900))
-            {strip.DrawToBitmap(top,new Rectangle(Point.Empty,top.Size));host.Home.DrawToBitmap(body,new Rectangle(Point.Empty,body.Size));using(var g=Graphics.FromImage(image)){g.DrawImageUnscaled(top,0,0);g.DrawImageUnscaled(body,0,48);}image.Save(Path.Combine(folder,"home-reference-wide.png"));}
+            using(var top=new Bitmap(1440,36))using(var body=new Bitmap(1424,848))using(var image=new Bitmap(1440,900))
+            {strip.DrawToBitmap(top,new Rectangle(Point.Empty,top.Size));host.Home.DrawToBitmap(body,new Rectangle(Point.Empty,body.Size));using(var g=Graphics.FromImage(image)){g.Clear(Color.FromArgb(235,232,230));g.DrawImageUnscaled(top,0,0);g.DrawImageUnscaled(body,8,44);}image.Save(Path.Combine(folder,"home-reference-wide.png"));}
         }
         finally{host.Home.Bounds=homeBounds;strip.Bounds=stripBounds;host.Home.Dock=DockStyle.Fill;strip.Dock=DockStyle.Top;host.PerformLayout();}
+    }
+    private static void CaptureNative(IntPtr window,string name)
+    {
+        string folder=Environment.GetEnvironmentVariable("AWCONTROL_TEST_SCREENSHOTS");if(string.IsNullOrEmpty(folder))return;Native.RECT rect;Native.GetWindowRect(window,out rect);using(var image=new Bitmap(rect.Right-rect.Left,rect.Bottom-rect.Top)){using(var g=Graphics.FromImage(image))g.CopyFromScreen(new Point(rect.Left,rect.Top),Point.Empty,image.Size);image.Save(Path.Combine(folder,name+".png"));}
     }
     private static void CaptureHome(Form form,string name)
     {
