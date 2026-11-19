@@ -31,11 +31,11 @@ jobs:
         include:
           - app: Excel
             repository: CaioRods/Excel-AW
-            revision: c7c1e1f2a759afaba68acda4525224447dd504f8
+            revision: 71ac0373f74e33e8b84bd256f1109f759374e6d3
             package: gridcraft
           - app: Word
             repository: CaioRods/Word-AW
-            revision: 1b2aad548778f1f2bb3914e3a93ad9189f06d1a2
+            revision: 4e2c4139c722de89f06fffbadd75bd14f3e7299d
             package: wordcraft
     steps:
       - uses: actions/checkout@v4
@@ -142,10 +142,10 @@ jobs:
         include:
           - app: Excel
             repository: CaioRods/Excel-AW
-            revision: c7c1e1f2a759afaba68acda4525224447dd504f8
+            revision: 71ac0373f74e33e8b84bd256f1109f759374e6d3
           - app: Word
             repository: CaioRods/Word-AW
-            revision: 1b2aad548778f1f2bb3914e3a93ad9189f06d1a2
+            revision: 4e2c4139c722de89f06fffbadd75bd14f3e7299d
     steps:
       - uses: actions/checkout@v4
         with:
@@ -169,6 +169,8 @@ jobs:
           if [ '${{ matrix.app }}' = 'Excel' ]; then
             cargo test --locked -p gridcraft-ui-egui --test it drag_cursor::ctrl_ -- --nocapture
             cargo test --locked -p gridcraft-ui-egui --lib aw_surface_tests -- --nocapture
+            cargo test --locked -p gridcraft-ui-egui --lib aw_workspace_action_tests -- --nocapture
+            cargo test --locked -p gridcraft-engine --lib aw_rename_tests -- --nocapture
             cargo test --locked -p gridcraft-ui-egui --lib aw_deselection_tests -- --nocapture
             cargo test --locked -p gridcraft-ui-egui --test it file_menu::aw_sidebar_ -- --nocapture
             cargo test --locked -p gridcraft-ui-egui --test it file_menu::hosted_excel_dont_save -- --nocapture

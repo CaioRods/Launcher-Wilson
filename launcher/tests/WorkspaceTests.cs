@@ -31,7 +31,7 @@ internal static class WorkspaceTests
         string word=Path.Combine(folder,"relatório de teste.txt"),excel=Path.Combine(folder,"tabela de teste.csv");
         File.WriteAllText(word,"Documento de teste do AWcontrol.");File.WriteAllText(excel,"Produto,Quantidade\nTeste,3\n");
         if(!real)File.WriteAllText(word+".keep","");
-        string failure=null;int phase=0;var timeout=Stopwatch.StartNew();var since=Stopwatch.StartNew();EditorPage first=null,second=null;int dragStep=0;Task<bool> detachTask=null;
+        string failure=null;int phase=0;var timeout=Stopwatch.StartNew();var since=Stopwatch.StartNew();EditorPage first=null,second=null;int dragStep=0;Task<bool> detachTask=null;Task<bool> fixedHeaders=null;
         var all=new System.Collections.Generic.List<Process>();
         try
         {
@@ -44,7 +44,7 @@ internal static class WorkspaceTests
                 {
                     try
                     {
-                        if(timeout.Elapsed.TotalSeconds>45)throw new Exception("Workspace test timeout at phase "+phase+"; "+host.CloseStatus);
+                        if(timeout.Elapsed.TotalSeconds>(real?75:45))throw new Exception("Workspace test timeout at phase "+phase+"; "+host.CloseStatus);
                         if(phase==6 && since.ElapsedMilliseconds>2000){Console.WriteLine("Closing: "+host.CloseStatus);since.Restart();}
                         if(phase==0)
                         {
@@ -62,9 +62,10 @@ internal static class WorkspaceTests
                         {
                             Native.RECT bounds;Native.GetClientRect(second.Window,out bounds);Require(bounds.Right==host.Stage.ClientSize.Width && bounds.Bottom==host.Stage.ClientSize.Height,"embedded editor must follow workspace resizing");
                             Capture(host,real?"real-mixed-tabs":"mixed-tabs");
-                            if(real){Native.SetForegroundWindow(host.Handle);Native.FocusEditor(second.Window);KeyboardTest.ClickOnPage(second.Window);phase=19;since.Restart();return;}
+                            if(real){fixedHeaders=VerifyFixedHeaders(host,first,second);phase=31;since.Restart();return;}
                             host.ClosePage(second);phase=3;since.Restart();return;
                         }
+                        if(phase==31&&fixedHeaders.IsCompleted){Require(fixedHeaders.Result,"hosted headers must stay fixed");Native.SetForegroundWindow(host.Handle);Native.FocusEditor(second.Window);KeyboardTest.ClickOnPage(second.Window);phase=19;since.Restart();return;}
                         if(phase==19 && since.ElapsedMilliseconds>500){KeyboardTest.DescribeFocus(second.Window);KeyboardTest.Type("AWCONTROLETESTE");phase=20;since.Restart();return;}
                         if(phase==20 && since.ElapsedMilliseconds>600){Capture(host,"real-word-after-typing");KeyboardTest.Shortcut(0x41);KeyboardTest.Shortcut(0x43);phase=21;since.Restart();return;}
                         if(phase==21 && since.ElapsedMilliseconds>500)
@@ -145,6 +146,17 @@ internal static class WorkspaceTests
             foreach(var p in all)try{if(!p.HasExited)p.Kill();}catch(InvalidOperationException){}
             try{Directory.Delete(folder,true);}catch(IOException){}catch(UnauthorizedAccessException){}
         }
+    }
+    private static async Task<bool> VerifyFixedHeaders(SuiteHost host,EditorPage first,EditorPage second)
+    {
+        foreach(var page in new[]{first,second})
+        {
+            host.SelectPage(page);await Task.Delay(300);Native.RECT before,after;Native.GetWindowRect(page.Window,out before);KeyboardTest.HeaderPress(page.Window);await Task.Delay(150);KeyboardTest.HeaderMove(page.Window);await Task.Delay(250);KeyboardTest.EndSelection();await Task.Delay(300);Native.GetWindowRect(page.Window,out after);
+            Require(before.Left==after.Left&&before.Top==after.Top&&before.Right==after.Right&&before.Bottom==after.Bottom,"dragging the editor header must not move its hosted page");
+            KeyboardTest.HeaderDoubleClick(page.Window);await Task.Delay(350);Native.GetWindowRect(page.Window,out after);Require(before.Left==after.Left&&before.Top==after.Top&&before.Right==after.Right&&before.Bottom==after.Bottom,"double-clicking the editor header must not maximize its hosted page");
+            Require((Native.GetWindowLongPtr(page.Window,-20).ToInt64()&0x00040000L)==0,"hosted editor must not advertise its own taskbar button");
+        }
+        host.SelectPage(second);Console.WriteLine("Hosted Excel/Word headers stay fixed and taskbar styles are hidden");return true;
     }
     private static void CheckHome(SuiteHost host,string folder)
     {
@@ -227,6 +239,10 @@ internal static class KeyboardTest
         Clipboard.Clear();var p=new Native.POINT{X=220,Y=310};Native.ClientToScreen(window,ref p);SetCursorPos(p.X,p.Y);
         Send(new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=2}}},new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=4}}});
     }
+    private static void MoveTo(IntPtr window,int x,int y){var p=new Native.POINT{X=x,Y=y};Native.ClientToScreen(window,ref p);SetCursorPos(p.X,p.Y);}
+    internal static void HeaderPress(IntPtr window){MoveTo(window,500,15);Send(new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=2}}});}
+    internal static void HeaderMove(IntPtr window){MoveTo(window,580,45);}
+    internal static void HeaderDoubleClick(IntPtr window){MoveTo(window,500,15);Send(new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=2}}},new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=4}}},new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=2}}},new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=4}}});}
     internal static void BeginSelection(IntPtr window){Clipboard.Clear();var p=new Native.POINT{X=215,Y=343};Native.ClientToScreen(window,ref p);SetCursorPos(p.X,p.Y);Send(new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=2}}});}
     internal static void MoveSelection(IntPtr window,int x){var p=new Native.POINT{X=x,Y=343};Native.ClientToScreen(window,ref p);SetCursorPos(p.X,p.Y);}
     internal static void EndSelection(){Send(new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=4}}});}
