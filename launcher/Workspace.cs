@@ -420,7 +420,7 @@ internal sealed class WorkspaceStrip : Control
         using(var b=new LinearGradientBrush(new RectangleF(0,0,LogicalWidth,h),Color.FromArgb(47,48,54),Color.FromArgb(26,27,32),90))g.FillRectangle(b,0,0,LogicalWidth,h);
         g.DrawImage(SuiteHost.Brand,12,(h-24)/2,38,24);WilsonHome.Text(g,"AWcontrol",new RectangleF(60,0,126,h),16,Color.White,true);
         using(var p=new Pen(Color.FromArgb(90,140,139,140)))g.DrawLine(p,BrandWidth-12,12,BrandWidth-12,h-12);
-        var home=new RectangleF(BrandWidth,5,Start-BrandWidth-8,h-5);
+        var home=new RectangleF(BrandWidth+4,4,Start-BrandWidth-8,h-4);
         if(host.ActivePage==null)Pill(g,home,Color.FromArgb(251,249,247));
         WilsonHome.Icon(g,"home",new RectangleF(home.X+12,10,16,16),host.ActivePage==null?Color.FromArgb(112,23,34):Color.White);
         WilsonHome.Text(g,"Início",new RectangleF(home.X+36,3,home.Width-39,h-3),13,host.ActivePage==null?Color.FromArgb(38,29,31):Color.White,true);
@@ -430,12 +430,12 @@ internal sealed class WorkspaceStrip : Control
             var page=host.Pages[i];float target=Start+i*TabWidth-offset,current;if(!positions.TryGetValue(page.Id,out current))current=target+14;
             float next=host.AnimateUI?current+(target-current)*.27f:target;if(Math.Abs(target-next)<.4f)next=target;else changing=true;positions[page.Id]=next;
             float old;hover.TryGetValue(page.Id,out old);float to=page==hotPage?1:0;float amount=host.AnimateUI?old+(to-old)*.24f:to;if(Math.Abs(amount-to)<.01f)amount=to;else changing=true;hover[page.Id]=amount;
-            var r=new RectangleF(next+2,6,TabWidth-8,h-6);rectangles[page]=r;bool active=host.ActivePage==page;
+            var r=new RectangleF(next+4,4,TabWidth-8,h-4);rectangles[page]=r;bool active=host.ActivePage==page;
             if(active)Pill(g,r,Color.FromArgb(251,249,247));else{Pill(g,r,Color.FromArgb(38+(int)(amount*26),39+(int)(amount*26),45+(int)(amount*26)));using(var path=Round(r,8))using(var pen=new Pen(Color.FromArgb(75+(int)(amount*80),120,120,125)))g.DrawPath(pen,path);}
             using(var b=new SolidBrush(page.App==0?Color.FromArgb(182,41,49):Color.FromArgb(213,158,40)))g.FillRectangle(b,r.Left+10,r.Top, r.Width-20,2);
             g.DrawImage(SuiteHost.Logos[page.App],r.Left+10,r.Top+6,20,20);
             WilsonHome.Text(g,page.Title,new RectangleF(r.Left+38,r.Top,r.Width-68,r.Height),12,active?Color.FromArgb(43,32,34):Color.White);
-            if(page==hotPage)Pill(g,new RectangleF(r.Right-27,r.Top+4,21,22),Color.FromArgb(active?20:32,active?Color.Black:Color.White));
+            if(page==hotPage)Pill(g,new RectangleF(r.Right-27,r.Top+5,21,22),Color.FromArgb(active?20:32,active?Color.Black:Color.White));
             using(var pen=new Pen(active?Color.FromArgb(76,60,62):Color.FromArgb(224,219,220),1.2f)){float x=r.Right-16,y=r.Top+r.Height/2;g.DrawLine(pen,x-3,y-3,x+3,y+3);g.DrawLine(pen,x-3,y+3,x+3,y-3);}
         }
         g.Restore(state);
