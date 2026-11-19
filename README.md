@@ -34,9 +34,9 @@ carta, ata de reunião, proposta, currículo e plano de projeto. Cada escolha cr
 arquivo editável pelo motor do respectivo app.
 
 Para devolver uma janela separada, arraste-a sobre o AWcontrol e solte quando aparecer a
-indicação de retorno. Também é possível puxar uma aba nativa para mover a janela. A transferência
-mantém o processo, o conteúdo não salvo e o histórico. Se houver várias abas na janela nativa,
-o conjunto é transferido e as abas internas continuam acessíveis. As bordas permitem
+indicação de retorno. Também é possível puxar uma aba nativa para mover a janela. Com apenas uma aba, a transferência mantém o processo e a janela separada desaparece. Com
+várias abas, somente a selecionada é transferida; as outras permanecem na janela de origem.
+O conteúdo não salvo, a seleção, a rolagem e o histórico de desfazer acompanham a aba. As bordas permitem
 redimensionar as janelas; o ícone da central permanece sendo o do AWcontrol.
 
 As responsabilidades da central, das sessões e dos editores estão descritas na

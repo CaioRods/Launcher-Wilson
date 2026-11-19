@@ -1,6 +1,6 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
+using System.Diagnostics;
 using System.Net.Sockets;
 using System.Threading.Tasks;
 
@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 // A lost commit reply retains the destination copy, never discards the last surviving document.
 internal static class SelectedHandoff
 {
-    internal static async Task<bool> Move(SuiteHost host,EditorPage source,Dictionary<string,object> state)
+    internal static async Task<bool> Move(SuiteHost host,EditorPage source)
     {
         string id=Guid.NewGuid().ToString("N")+Guid.NewGuid().ToString("N");EditorPage target=null;bool importAttempted=false,commitStarted=false,adopted=false;
         try
@@ -19,7 +19,7 @@ internal static class SelectedHandoff
             await Wait(target);importAttempted=true;var receipt=await EditorControl.Send(target,"import",id);object transfer,pid;
             if(!receipt.TryGetValue("transfer",out transfer)||!Equals(transfer,id)||!receipt.TryGetValue("sourcePid",out pid)||!Equals(pid,source.Process.Id))throw new IOException("A transferência não foi confirmada.");
             commitStarted=true;await EditorControl.Send(source,"commit",id);
-            await EditorControl.Send(target,"accept",id);target.Title=source.Title;object path;if(state.TryGetValue("path",out path))target.Path=path as string;
+            await EditorControl.Send(target,"accept",id);target.Title=source.Title;var current=await EditorControl.Send(target,"state");object path;if(current.TryGetValue("path",out path))target.Path=path as string;
             if(!source.DockOrigin.IsEmpty)Native.SetWindowPos(source.Window,IntPtr.Zero,source.DockOrigin.X,source.DockOrigin.Y,source.DockOrigin.Width,source.DockOrigin.Height,0x4014);
             host.AdoptImported(target);adopted=true;
         }
@@ -53,7 +53,7 @@ internal static class SelectedHandoff
     private static void DeleteCheckpoint(string id){try{string path=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),"AlimentosWilson","transfers",id+".json");if(File.Exists(path))File.Delete(path);}catch(IOException){}catch(UnauthorizedAccessException){}}
     private static async Task Wait(EditorPage page)
     {
-        for(int i=0;i<120;i++){if(page.Process.HasExited)throw new IOException("O editor de destino fechou.");try{await EditorControl.Send(page,"state");return;}catch(IOException){}catch(SocketException){}await Task.Delay(100);}
+        var clock=Stopwatch.StartNew();while(clock.Elapsed.TotalSeconds<30){if(page.Process.HasExited)throw new IOException("O editor de destino fechou.");try{await EditorControl.Send(page,"state");return;}catch(IOException){}catch(SocketException){}await Task.Delay(100);}
         throw new IOException("O editor de destino não respondeu.");
     }
     private static bool Expected(Exception error){return error is IOException||error is SocketException||error is AggregateException||error is InvalidOperationException||error is UnauthorizedAccessException||error is ArgumentException;}

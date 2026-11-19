@@ -28,10 +28,21 @@ image against the installed application, authenticates and verifies the live PID
 Stale records never launch processes. Closed processes are removed from the in-memory catalog.
 
 Move a standalone window, or pull a native tab away from its strip, and drop over the AWcontrol
-window. The cue identifies the target. The same process/HWND moves into the workspace and is
-removed from the standalone list. With several native tabs, the whole window is transferred and
-the internal tabs remain accessible; there is no silent loss of background documents. Moving just
-one document out of a multi-document process is a separate ownership problem and is not claimed.
+window. The cue identifies the target. A border resize is explicitly excluded from docking.
+
+With one document, the same process/HWND moves into the workspace. With several native tabs,
+only the active document moves: the source creates a private, bounded checkpoint containing the
+native model, saved baseline, undo/redo, selection, view and relevant editor state. A hidden fresh
+editor imports and acknowledges it before the source removes that document. Other source tabs
+remain in their original process/window. Source edits and close are blocked during the short
+transaction; revision checks reject a changed source. The destination is shown only after the
+commit. The private checkpoint is deleted after use. A lost commit reply retains the destination
+copy and reports the uncertainty; it never deletes the last accepted copy.
+
+The checkpoint is not an XLSX/DOCX save/reopen, and creates no user document file. It uses a
+random 64-hex identifier under the current user's application-data directory, not a caller-supplied
+path, with a 128 MiB limit. Oversized/refused checkpoints leave the original document open. Window
+chrome, editor-control credentials and background documents are not copied to the recipient.
 
 ## Future communication
 

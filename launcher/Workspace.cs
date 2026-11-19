@@ -321,11 +321,13 @@ internal sealed class SuiteHost : Form
     internal async Task<bool> DockPage(EditorPage page)
     {
         if(!DetachedPages.Contains(page)||page.Attaching||page.Detaching||page.CommandBusy||page.Process.HasExited||!Native.IsWindow(page.Window))return false;
+        if(Pages.Count>=32){Notify("Feche uma página antes de devolver outra.");return false;}
         page.Detaching=true;bool requested=false;
         try
         {
             if(NativeCommands){var state=await EditorControl.Send(page,"state");object pid,count;if(state.TryGetValue("pid",out pid)&&!Equals(pid,page.Process.Id))throw new IOException("A sessão do editor mudou.");
-                if(state.TryGetValue("count",out count)&&count is int&&(int)count>1){bool moved=await SelectedHandoff.Move(this,page,state);page.Detaching=false;return moved;}
+                if(!state.TryGetValue("count",out count)||!(count is int)||(int)count<1){page.Detaching=false;Notify("Não foi possível identificar as abas. Atualize os dois editores em Aplicativos.");return false;}
+                if((int)count>1){bool moved=await SelectedHandoff.Move(this,page);page.Detaching=false;return moved;}
                 requested=true;await EditorControl.Send(page,"embed");}
             DetachedPages.Remove(page);page.CloseSent=false;page.Detaching=false;page.LastSize=Size.Empty;
             page.Attached.Reset();page.Attaching=true;Pages.Add(page);SelectPage(page);AttachEditor(page,page.Window);Native.SetForegroundWindow(Handle);return true;
