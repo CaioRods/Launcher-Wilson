@@ -35,7 +35,7 @@ jobs:
             package: gridcraft
           - app: Word
             repository: CaioRods/Word-AW
-            revision: 09c67b8f9d2e14a52f2e24f1ad1a26c81229ff3b
+            revision: 2d58b6c5a4851702f2e7f1fae0b4a550fa9479de
             package: wordcraft
     steps:
       - uses: actions/checkout@v4
@@ -145,7 +145,7 @@ jobs:
             revision: 27fa580c7272099d6746ac727b89499ddfcac3ea
           - app: Word
             repository: CaioRods/Word-AW
-            revision: 09c67b8f9d2e14a52f2e24f1ad1a26c81229ff3b
+            revision: 2d58b6c5a4851702f2e7f1fae0b4a550fa9479de
     steps:
       - uses: actions/checkout@v4
         with:
