@@ -29,7 +29,7 @@ internal sealed class WilsonHome : Control
     private readonly List<Target> targets=new List<Target>();
     private readonly Dictionary<string,float> hover=new Dictionary<string,float>();
     private readonly System.Windows.Forms.Timer animation=new System.Windows.Forms.Timer{Interval=16};
-    private readonly TextBox search=new TextBox{BorderStyle=BorderStyle.None,Font=new Font("Segoe UI",11),BackColor=Color.White,AccessibleName="Buscar arquivos e modelos"};
+    private readonly TextBox search=new TextBox{BorderStyle=BorderStyle.None,Font=new Font("Segoe UI",11),BackColor=Color.White,AccessibleName="Buscar arquivos"};
     private readonly VScrollBar scroll=new VScrollBar{SmallChange=32,LargeChange=120,Visible=false};
     private readonly List<string> recent=new List<string>();
     private readonly string stateFolder;
@@ -58,7 +58,7 @@ internal sealed class WilsonHome : Control
         stateFolder=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),"AlimentosWilson");
         Controls.Add(search);Controls.Add(scroll);
         search.TextChanged+=(s,e)=>{offset=0;Invalidate();};
-        search.HandleCreated+=(s,e)=>Cue(search.Handle,0x1501,new IntPtr(1),"Buscar arquivos e modelos");
+        search.HandleCreated+=(s,e)=>Cue(search.Handle,0x1501,new IntPtr(1),page=="models"?"Buscar modelos":"Buscar arquivos");
         scroll.ValueChanged+=(s,e)=>{offset=scroll.Value;Invalidate();};
         animation.Tick+=(s,e)=>{
             bool changed=false;
@@ -76,7 +76,7 @@ internal sealed class WilsonHome : Control
     private static extern IntPtr Cue(IntPtr h,int message,IntPtr w,string text);
     internal void UpdateProfile(string name,Image image)
     {name=name=="Conta"?"":name;if(person==name && avatar==image)return;person=name;avatar=image;Invalidate();}
-    internal void Navigate(string id){page=id;offset=0;hot="";focus="";Invalidate();}
+    internal void Navigate(string id){page=id;offset=0;hot="";focus="";search.AccessibleName=page=="models"?"Buscar modelos":"Buscar arquivos";if(search.IsHandleCreated)Cue(search.Handle,0x1501,new IntPtr(1),search.AccessibleName);Invalidate();}
     internal void AddRecent(string path)
     {
         recent.RemoveAll(p=>string.Equals(p,path,StringComparison.OrdinalIgnoreCase));recent.Insert(0,path);if(recent.Count>40)recent.RemoveRange(40,recent.Count-40);
@@ -207,8 +207,7 @@ internal sealed class WilsonHome : Control
         bool pair=width>=690;float cardWidth=pair?(width-18)/2:width;
         AppCard(g,new RectangleF(x,top,cardWidth,118),0);AppCard(g,new RectangleF(pair?x+cardWidth+18:x,pair?top:top+134,cardWidth,118),1);
         float rowsY=top+(pair?142:276);float rowsH=DrawRecent(g,x,rowsY,width,true);
-        Link(g,"allrecent",new RectangleF(x+width-155,rowsY+rowsH+8,155,32),"Ver todos os recentes ›",Color.FromArgb(130,18,33),()=>Navigate("recent"));
-        contentHeight=rowsY+rowsH+56;
+        contentHeight=rowsY+rowsH+30;
     }
     private void AppCard(Graphics g,RectangleF r,int app)
     {

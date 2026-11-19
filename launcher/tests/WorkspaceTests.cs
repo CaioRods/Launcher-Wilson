@@ -72,7 +72,16 @@ internal static class WorkspaceTests
                             string copied="";try{copied=Clipboard.GetText();}catch(System.Runtime.InteropServices.ExternalException){}
                             if(!copied.Contains("AWCONTROLETESTE")&&since.ElapsedMilliseconds<5000)return;
                             Require(copied.Contains("AWCONTROLETESTE"),"a new hosted Word page must accept actual keyboard input and copy its typed text");
-                            Capture(host,"real-word-typing");Console.WriteLine("Blank hosted Word typing and clipboard passed");host.ClosePage(second);phase=22;since.Restart();return;
+                            Capture(host,"real-word-typing");Console.WriteLine("Blank hosted Word typing and clipboard passed");KeyboardTest.BeginSelection(second.Window);phase=24;since.Restart();return;
+                        }
+                        if(phase==24 && since.ElapsedMilliseconds>300){KeyboardTest.EndSelection(second.Window);phase=25;since.Restart();return;}
+                        if(phase==25 && since.ElapsedMilliseconds>500){KeyboardTest.Shortcut(0x43);phase=26;since.Restart();return;}
+                        if(phase==26 && since.ElapsedMilliseconds>500)
+                        {
+                            string copied="";try{copied=Clipboard.GetText();}catch(System.Runtime.InteropServices.ExternalException){}
+                            if(!copied.Contains("CONTROLE")&&since.ElapsedMilliseconds<5000)return;
+                            Capture(host,"real-word-mouse-selection");Require(copied.Contains("CONTROLE"),"mouse drag must select editable Word text after switching tabs");
+                            Console.WriteLine("Hosted Word mouse selection and copy passed");host.ClosePage(second);phase=22;since.Restart();return;
                         }
                         if(phase==22 && since.ElapsedMilliseconds>800){Capture(host,"real-word-save-question");KeyboardTest.Key(0x27);phase=23;since.Restart();return;}
                         if(phase==23 && since.ElapsedMilliseconds>350){KeyboardTest.Key(0x0D);phase=4;Console.WriteLine("Discarding typed Word test document");return;}
@@ -157,7 +166,7 @@ internal static class WorkspaceTests
         {
             host.Home.Dock=DockStyle.None;strip.Dock=DockStyle.None;strip.SetBounds(0,0,1440,48);host.Home.SetBounds(0,0,1440,852);host.Home.Refresh();
             Require(host.Home.ActionBounds("modelbudget").IsEmpty&&host.Home.ActionBounds("manage").IsEmpty,"Home must keep templates and application management off the main canvas");
-            Require(host.Home.ActionBounds("allrecent").Width>0,"all recent files must remain accessible");
+            Require(host.Home.ActionBounds("recent").Width>0,"all recent files must remain accessible in the sidebar");
             using(var top=new Bitmap(1440,48))using(var body=new Bitmap(1440,852))using(var image=new Bitmap(1440,900))
             {strip.DrawToBitmap(top,new Rectangle(Point.Empty,top.Size));host.Home.DrawToBitmap(body,new Rectangle(Point.Empty,body.Size));using(var g=Graphics.FromImage(image)){g.DrawImageUnscaled(top,0,0);g.DrawImageUnscaled(body,0,48);}image.Save(Path.Combine(folder,"home-reference-wide.png"));}
         }
@@ -204,6 +213,8 @@ internal static class KeyboardTest
         Clipboard.Clear();var p=new Native.POINT{X=220,Y=310};Native.ClientToScreen(window,ref p);SetCursorPos(p.X,p.Y);
         Send(new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=2}}},new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=4}}});
     }
+    internal static void BeginSelection(IntPtr window){Clipboard.Clear();var p=new Native.POINT{X=215,Y=343};Native.ClientToScreen(window,ref p);SetCursorPos(p.X,p.Y);Send(new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=2}}});}
+    internal static void EndSelection(IntPtr window){var p=new Native.POINT{X=385,Y=343};Native.ClientToScreen(window,ref p);SetCursorPos(p.X,p.Y);Send(new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=4}}});}
     internal static void Type(string text){var list=new System.Collections.Generic.List<Input>();list.Add(Press(0x10,false));foreach(char c in text){list.Add(Press(c,false));list.Add(Press(c,true));}list.Add(Press(0x10,true));Send(list.ToArray());}
     internal static void Key(ushort code){Send(Press(code,false),Press(code,true));}
     internal static void Shortcut(ushort code){Send(Press(0x11,false),Press(code,false),Press(code,true),Press(0x11,true));}
