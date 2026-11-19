@@ -19,30 +19,63 @@ internal static class Distribution
 {
     internal static readonly string[] Names = { "Excel AW", "Word AW" };
     private static readonly string[] Slugs = { "Excel-AW", "Word-AW" };
-    private static readonly Version[] Bundled = { new Version(1, 41, 6), new Version(0, 18, 2) };
+    private static readonly Version[] Bundled = { new Version(1, 41, 14), new Version(0, 18, 10) };
+
+    internal static Update BundledUpdate(int app) { return new Update { Version = Bundled[app] }; }
 
     internal static string LocalPath(int app)
     {
         return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "instaladores", Slugs[app] + "-x64.msi");
     }
 
+    internal static string InstalledPath(int app)
+    {
+        string exe = app == 0 ? "gridcraft.exe" : "wordcraft.exe";
+        foreach (RegistryHive hive in new[] { RegistryHive.CurrentUser, RegistryHive.LocalMachine })
+        foreach (RegistryView view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
+        {
+            try
+            {
+                using (var root = RegistryKey.OpenBaseKey(hive, view))
+                using (var key = root.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\" + exe))
+                {
+                    string path = ExistingExecutable(key == null ? null : key.GetValue(null) as string, exe);
+                    if (path != null) return path;
+                }
+            }
+            catch (System.Security.SecurityException) { }
+            catch (UnauthorizedAccessException) { }
+            catch (IOException) { }
+        }
+        return null;
+    }
+
+    internal static string ExistingExecutable(string value, string exe)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        string path = Environment.ExpandEnvironmentVariables(value.Trim().Trim('"'));
+        return string.Equals(Path.GetFileName(path), exe, StringComparison.OrdinalIgnoreCase) && File.Exists(path) ? path : null;
+    }
+
     internal static Version InstalledVersion(int app, bool machine)
     {
-        string key = app == 0 ? "ExcelAW" : "WordCraft";
-        string exe = app == 0 ? "gridcraft.exe" : "wordcraft.exe";
-        using (var root = RegistryKey.OpenBaseKey(machine ? RegistryHive.LocalMachine : RegistryHive.CurrentUser, RegistryView.Registry64))
-        using (var location = root.OpenSubKey(@"SOFTWARE\" + key))
-        {
-            string directory = location == null ? null : location.GetValue("InstallDir") as string;
-            if (!string.IsNullOrEmpty(directory))
-            {
-                string path = Path.Combine(directory, exe);
-                Version version;
-                if (File.Exists(path) && Version.TryParse(FileVersionInfo.GetVersionInfo(path).ProductVersion, out version) &&
-                    version > Bundled[app]) return version;
-            }
-        }
+        string path = InstalledPath(app);
+        Version version;
+        if (path != null && Version.TryParse(FileVersionInfo.GetVersionInfo(path).ProductVersion, out version)) return version;
         return Bundled[app];
+    }
+
+    internal static Update ChooseUpdate(int app, Version installed, bool present, Update remote)
+    {
+        if (remote != null && remote.Version <= installed) remote = null;
+        Update bundled = BundledUpdate(app);
+        if (present && bundled.Version > installed && (remote == null || bundled.Version > remote.Version)) return bundled;
+        return remote;
+    }
+
+    internal static string ButtonText(int app, bool installed, bool update)
+    {
+        return (update ? "Atualizar " : installed ? "Abrir " : "Instalar ") + Names[app];
     }
 
     internal static Update Latest(int app)

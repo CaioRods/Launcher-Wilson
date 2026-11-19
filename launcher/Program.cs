@@ -3,10 +3,11 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
-internal sealed class Central : Form
+internal sealed class Central : UserControl
 {
     private static readonly Color Paper = Color.FromArgb(255, 248, 235);
     private static readonly Color Ink = Color.FromArgb(52, 24, 20);
@@ -18,90 +19,45 @@ internal sealed class Central : Form
     private readonly ProgressBar progress;
     private readonly Update[] updates = new Update[2];
     private bool busy;
+    private readonly System.Action<int> openInWorkspace;
 
     [STAThread]
     private static void Main(string[] args)
     {
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
-        using (var window = new Central())
-        {
-            if (args.Length != 1 || args[0] != "--smoke-test") Application.Run(window);
-        }
+        Native.SetCurrentProcessExplicitAppUserModelID("AWcontrol");
+        SuiteHost.Run(args);
     }
 
-    private Central()
+    internal Central(System.Action<int> open = null)
     {
-        Text = "Central de Apps · Alimentos Wilson";
-        Font = new Font("Segoe UI", 10f);
-        AutoScaleMode = AutoScaleMode.Dpi;
-        AutoScaleDimensions = new SizeF(96, 96);
-        ClientSize = new Size(690, 558);
-        StartPosition = FormStartPosition.CenterScreen;
-        FormBorderStyle = FormBorderStyle.FixedSingle;
-        MaximizeBox = false;
-        BackColor = Paper;
-        var hero = new Hero { Bounds = new Rectangle(0, 0, 690, 171) };
-        Controls.Add(hero);
-        hero.Controls.Add(Art("wilson", 32, 17, 106, 52));
-        hero.Controls.Add(Caption("Central de Apps", 32, 72, 600, 50, 30f, Color.White, true));
-        hero.Controls.Add(Caption("Instale e atualize seus aplicativos de trabalho.", 34, 129, 625, 25, 11f, Color.White, false));
-
-        excel = Tile("Excel", "Planilhas, cálculos e controles.", 32, Red, Color.White);
-        word = Tile("Word", "Documentos, relatórios e modelos.", 351, Gold, Ink);
-
-        machine = new CheckBox {
-            Text = "Instalar para todos os usuários (requer administrador)",
-            Bounds = new Rectangle(32, 356, 626, 27), ForeColor = Ink
-        };
-        Controls.Add(machine);
-        machine.CheckedChanged += (s, e) => { if (!busy) RefreshButtons(); };
-        both = Action("Instalar os dois", 32, 396, 307, 40, Red, Color.White);
-        check = Action("Buscar atualizações", 351, 396, 307, 40, Color.FromArgb(249, 227, 182), Ink);
-        Controls.AddRange(new Control[] { both, check });
-
-        status = Caption("Windows 10 e 11 · x64  |  Instalação para seu usuário", 32, 460, 626, 52, 10f, Ink, false);
-        status.AccessibleName = "Estado da instalação";
-        Controls.Add(status);
-        progress = new ProgressBar {
-            Bounds = new Rectangle(32, 518, 626, 8), Style = ProgressBarStyle.Marquee,
-            MarqueeAnimationSpeed = 25, Visible = false, AccessibleName = "Operação em andamento"
-        };
-        Controls.Add(progress);
-        excel.Click += async (s, e) => await Install(0);
-        word.Click += async (s, e) => await Install(1);
-        both.Click += async (s, e) => await Install(0, 1);
-        check.Click += async (s, e) => await CheckUpdates();
-        FormClosing += (s, e) => { if (busy) e.Cancel = true; };
-        if (SystemInformation.IsMenuAnimationEnabled && !SystemInformation.HighContrast)
-        {
-            Opacity = 0;
-            Shown += (s, e) =>
-            {
-                var clock = Stopwatch.StartNew();
-                var animation = new Timer { Interval = 15 };
-                animation.Tick += (sender, args) =>
-                {
-                    double t = Math.Min(1.0, clock.ElapsedMilliseconds / 290.0);
-                    Opacity = 1.0 - Math.Pow(1.0 - t, 3);
-                    if (t >= 1.0) animation.Dispose();
-                };
-                FormClosed += (sender, args) => animation.Dispose();
-                animation.Start();
-            };
-        }
+        openInWorkspace = open;
+        Text = "Aplicativos · AWcontrol";Font=new Font("Segoe UI",9f);BackColor=Color.FromArgb(250,248,247);Size=new Size(800,320);
+        excel=Tile("Excel","Planilhas e controles.",0,Red,Color.White);word=Tile("Word","Documentos e relatórios.",0,Gold,Ink);
+        machine=new CheckBox{Text="Instalar para todos os usuários",AutoSize=true,ForeColor=Ink,AccessibleDescription="Requer permissão de administrador"};Controls.Add(machine);
+        machine.CheckedChanged+=(s,e)=>{if(!busy)RefreshButtons();};
+        both=Action("Instalar os dois",0,0,230,34,Red,Color.White);check=Action("Buscar atualizações",0,0,230,34,Color.FromArgb(249,227,182),Ink);Controls.AddRange(new Control[]{both,check});
+        status=Caption("Instalação para seu usuário · Windows x64",0,0,600,48,9,Ink,false);status.AccessibleName="Estado da instalação";Controls.Add(status);
+        progress=new ProgressBar{Style=ProgressBarStyle.Marquee,MarqueeAnimationSpeed=25,Visible=false,Height=6};Controls.Add(progress);
+        excel.Click+=async(s,e)=>await Install(0);word.Click+=async(s,e)=>await Install(1);both.Click+=async(s,e)=>await Install(0,1);check.Click+=async(s,e)=>await CheckUpdates();
+        VisibleChanged+=(s,e)=>{if(Visible&&!busy)RefreshButtons();};Resize+=(s,e)=>LayoutPage();RefreshButtons();LayoutPage();
+    }
+    internal bool Busy {get{return busy;}}
+    private void LayoutPage()
+    {
+        float u=DeviceDpi/96f;int width=(int)(ClientSize.Width/u),tile=(width-16)/2;
+        int index=0;foreach(var panel in Controls.OfType<Panel>())
+        {panel.SetBounds((int)(index++*(tile+16)*u),0,(int)(tile*u),(int)(128*u));foreach(Control c in panel.Controls){if(c is Button)c.SetBounds((int)(12*u),(int)(84*u),(int)((tile-24)*u),(int)(32*u));}}
+        machine.Location=new Point(0,(int)(148*u));both.SetBounds(0,(int)(184*u),(int)(tile*u),(int)(34*u));check.SetBounds((int)((tile+16)*u),(int)(184*u),(int)(tile*u),(int)(34*u));
+        status.SetBounds(0,(int)(234*u),(int)(width*u),(int)(52*u));progress.SetBounds(0,(int)(292*u),(int)(width*u),(int)(6*u));
     }
 
     private Button Tile(string app, string description, int x, Color accent, Color text)
     {
-        var tile = new Panel { Bounds = new Rectangle(x, 194, 307, 146), BackColor = Color.White };
-        Controls.Add(tile);
-        tile.Controls.Add(Art(app.ToLowerInvariant(), 14, 16, 58, 58));
-        tile.Controls.Add(Caption(app + " AW", 84, 16, 207, 31, 17f, Ink, true));
-        tile.Controls.Add(Caption(description, 84, 52, 207, 34, 9.5f, Ink, false));
-        var button = Action("Instalar " + app + " AW", 14, 96, 279, 35, accent, text);
-        tile.Controls.Add(button);
-        return button;
+        var tile=new Panel{BackColor=Color.White};Controls.Add(tile);
+        tile.Controls.Add(Art(app.ToLowerInvariant(),12,14,40,40));tile.Controls.Add(Caption(app+" AW",62,12,160,28,14,Ink,true));tile.Controls.Add(Caption(description,62,42,180,32,9,Ink,false));
+        var button=Action("Instalar "+app+" AW",12,84,260,32,accent,text);tile.Controls.Add(button);return button;
     }
 
     private void SetBusy(bool value)
@@ -112,15 +68,18 @@ internal sealed class Central : Form
 
     private void RefreshButtons()
     {
-        excel.Text = Candidate(0) == null ? "Instalar Excel AW" : "Atualizar Excel AW";
-        word.Text = Candidate(1) == null ? "Instalar Word AW" : "Atualizar Word AW";
-        both.Text = Candidate(0) == null && Candidate(1) == null ? "Instalar os dois" : "Instalar / atualizar os dois";
+        bool first = Distribution.InstalledPath(0) != null;
+        bool second = Distribution.InstalledPath(1) != null;
+        excel.Text = Distribution.ButtonText(0, first, Candidate(0) != null);
+        word.Text = Distribution.ButtonText(1, second, Candidate(1) != null);
+        both.Text = Candidate(0) != null || Candidate(1) != null ? "Instalar / atualizar os dois"
+            : first && second ? "Abrir os dois" : first || second ? "Instalar o aplicativo restante" : "Instalar os dois";
     }
 
     private Update Candidate(int app)
     {
-        var update = updates[app];
-        return update != null && update.Version > Distribution.InstalledVersion(app, machine.Checked) ? update : null;
+        return Distribution.ChooseUpdate(app, Distribution.InstalledVersion(app, machine.Checked),
+            Distribution.InstalledPath(app) != null, updates[app]);
     }
 
     private async Task CheckUpdates()
@@ -152,17 +111,31 @@ internal sealed class Central : Form
         bool restart = false;
         int finished = 0;
         string appName = "";
+        bool openExisting = Distribution.InstalledPath(0) != null && Distribution.InstalledPath(1) != null
+            && Candidate(0) == null && Candidate(1) == null;
         try
         {
             foreach (int app in apps)
             {
                 appName = Distribution.Names[app];
                 Update update = Candidate(app);
+                string installed = Distribution.InstalledPath(app);
+                if (update == null && installed != null)
+                {
+                    // Batch installation skips an app already installed; once both are installed it opens both.
+                    if (apps.Length == 1 || openExisting)
+                    {
+                        if (openInWorkspace != null) openInWorkspace(app);
+                        else Process.Start(new ProcessStartInfo(installed) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(installed) });
+                    }
+                    finished++;
+                    continue;
+                }
                 string folder = null;
                 try
                 {
                     string path = Distribution.LocalPath(app);
-                    if (update != null)
+                    if (update != null && update.Url != null)
                     {
                         status.Text = "Baixando e verificando " + appName + " " + update.Version + "…";
                         folder = Path.Combine(Path.GetTempPath(), "Wilson-" + Guid.NewGuid().ToString("N"));
@@ -196,7 +169,7 @@ internal sealed class Central : Form
                     }
                 }
             }
-            status.Text = apps.Length == 2 ? "Excel AW e Word AW instalados." : appName + " instalado.";
+            status.Text = "Pronto. Use os botões Abrir para acessar seus aplicativos.";
         }
         catch (System.ComponentModel.Win32Exception error)
         {

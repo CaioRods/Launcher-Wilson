@@ -16,14 +16,24 @@ foreach ($machine in @($false, $true)) {
   $root = if ($machine) { 'HKLM:' } else { 'HKCU:' }
   Invoke-Msi '/i' $properties
   try {
-    $registry = if ($Name -eq 'Excel AW') { 'ExcelAW' } else { 'WordCraft' }
     $exe = if ($Name -eq 'Excel AW') { 'gridcraft.exe' } else { 'wordcraft.exe' }
-    $installed = Get-ItemPropertyValue -LiteralPath "$root\SOFTWARE\$registry" -Name InstallDir
-    if (!(Test-Path -LiteralPath (Join-Path $installed $exe) -PathType Leaf)) {
+    $app = if ($Name -eq 'Excel AW') { 0 } else { 1 }
+    $installed = (Get-Item -LiteralPath "$root\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\$exe").GetValue('')
+    if (!(Test-Path -LiteralPath $installed -PathType Leaf)) {
       throw "Arquivo executável de $Name ausente no escopo $root."
     }
-    $actual = (Get-Item -LiteralPath (Join-Path $installed $exe)).VersionInfo.ProductName
+    $actual = (Get-Item -LiteralPath $installed).VersionInfo.ProductName
     if ($actual -ne $Name) { throw "Nome de produto inesperado: $actual" }
+    $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+    $tests = Join-Path $env:RUNNER_TEMP ('Wilson-installed-tests-' + [guid]::NewGuid().ToString('N') + '.exe')
+    try {
+      & $compiler /nologo /codepage:65001 /target:exe /reference:System.Web.Extensions.dll "/out:$tests" "$PSScriptRoot\Distribution.cs" "$PSScriptRoot\tests\DistributionTests.cs"
+      if ($LASTEXITCODE -ne 0) { throw 'Falha ao compilar a validação do launcher.' }
+      & $tests $app $installed
+      if ($LASTEXITCODE -ne 0) { throw 'O launcher não reconheceu o aplicativo instalado.' }
+      $process = Start-Process -FilePath $installed -ArgumentList '--version' -PassThru -Wait
+      if ($process.ExitCode -ne 0) { throw 'O aplicativo instalado falhou ao consultar sua versão.' }
+    } finally { Remove-Item -LiteralPath $tests -ErrorAction SilentlyContinue }
     Write-Output "Instalação validada: $Name ($root)"
   } finally {
     Invoke-Msi '/x' $properties
