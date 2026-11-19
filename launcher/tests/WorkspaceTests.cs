@@ -31,7 +31,7 @@ internal static class WorkspaceTests
         string word=Path.Combine(folder,"relatório de teste.txt"),excel=Path.Combine(folder,"tabela de teste.csv");
         File.WriteAllText(word,"Documento de teste do AWcontrol.");File.WriteAllText(excel,"Produto,Quantidade\nTeste,3\n");
         if(!real)File.WriteAllText(word+".keep","");
-        string failure=null;int phase=0;var timeout=Stopwatch.StartNew();var since=Stopwatch.StartNew();EditorPage first=null,second=null;int dragStep=0;Task<bool> detachTask=null;Task<bool> fixedHeaders=null;bool excelDetached=false;
+        string failure=null;int phase=0;var timeout=Stopwatch.StartNew();var since=Stopwatch.StartNew();EditorPage first=null,second=null;int dragStep=0;Task<bool> detachTask=null;Task<bool> fixedHeaders=null;bool excelDetached=false;Task<bool> rootChrome=null;bool chromeChecked=false;
         var all=new System.Collections.Generic.List<Process>();
         try
         {
@@ -46,8 +46,10 @@ internal static class WorkspaceTests
                     {
                         if(timeout.Elapsed.TotalSeconds>(real?75:45))throw new Exception("Workspace test timeout at phase "+phase+"; "+host.CloseStatus);
                         if(phase==6 && since.ElapsedMilliseconds>2000){Console.WriteLine("Closing: "+host.CloseStatus);since.Restart();}
+                        if(phase==-1&&rootChrome.IsCompleted){Require(rootChrome.Result,"native header gestures must maximize and restore");chromeChecked=true;phase=0;return;}
                         if(phase==0)
                         {
+                            if(real&&!chromeChecked){rootChrome=VerifyRootChrome(host);phase=-1;return;}
                             if(!real)CheckHome(host,folder);
                             Console.WriteLine("Opening editor processes");Capture(host,real?"real-home":"home");host.OpenDocument(0,null);host.OpenDocument(1,real?null:word);all.AddRange(host.Pages.Select(p=>p.Process));first=host.Pages[0];second=host.Pages[1];phase=1;Console.WriteLine("Waiting for native editor windows");return;
                         }
@@ -157,6 +159,11 @@ internal static class WorkspaceTests
             try{Directory.Delete(folder,true);}catch(IOException){}catch(UnauthorizedAccessException){}
         }
     }
+    private static async Task<bool> VerifyRootChrome(SuiteHost host)
+    {
+        Native.SetForegroundWindow(host.Handle);await Task.Delay(350);KeyboardTest.RootDoubleClick(host.Handle);await Task.Delay(600);Require(host.WindowState==FormWindowState.Maximized,"actual header double-click must maximize the AWcontrol window");
+        KeyboardTest.RootDoubleClick(host.Handle);await Task.Delay(600);Require(host.WindowState==FormWindowState.Normal,"actual header double-click must restore the AWcontrol window");Console.WriteLine("Native AWcontrol double-click maximize/restore passed");return true;
+    }
     private static async Task<bool> VerifyFixedHeaders(SuiteHost host,EditorPage first,EditorPage second)
     {
         foreach(var page in new[]{first,second})
@@ -252,6 +259,8 @@ internal static class KeyboardTest
     private static void MoveTo(IntPtr window,int x,int y){var p=new Native.POINT{X=x,Y=y};Native.ClientToScreen(window,ref p);SetCursorPos(p.X,p.Y);}
     internal static void HeaderPress(IntPtr window){MoveTo(window,500,15);Send(new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=2}}});}
     internal static void HeaderMove(IntPtr window){MoveTo(window,580,45);}
+    internal static void RootDoubleClick(IntPtr window){MoveTo(window,80,16);ClickTwice();}
+    private static void ClickTwice(){Send(new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=2}}},new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=4}}},new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=2}}},new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=4}}});}
     internal static void HeaderDoubleClick(IntPtr window){MoveTo(window,500,15);Send(new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=2}}},new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=4}}},new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=2}}},new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=4}}});}
     internal static void BeginSelection(IntPtr window){Clipboard.Clear();var p=new Native.POINT{X=215,Y=343};Native.ClientToScreen(window,ref p);SetCursorPos(p.X,p.Y);Send(new Input{Type=0,Value=new Data{Mouse=new MouseInput{Flags=2}}});}
     internal static void MoveSelection(IntPtr window,int x){var p=new Native.POINT{X=x,Y=343};Native.ClientToScreen(window,ref p);SetCursorPos(p.X,p.Y);}
