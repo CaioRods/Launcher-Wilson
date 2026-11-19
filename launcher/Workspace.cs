@@ -77,8 +77,8 @@ internal sealed class SuiteHost : Form
         BackColor = Color.FromArgb(248,248,249);
         Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         Home = new WilsonHome(this);
-        strip = new WorkspaceStrip(this) { Dock = DockStyle.Top, Height = 36 };
-        var body=new Panel{Dock=DockStyle.Fill,Padding=new Padding(8),BackColor=Color.FromArgb(235,232,230)};body.Controls.Add(Stage);
+        strip = new WorkspaceStrip(this) { Dock = DockStyle.Top, Height = 40 };
+        var body=new Panel{Dock=DockStyle.Fill,Padding=Padding.Empty,BackColor=Color.FromArgb(235,232,230)};body.Controls.Add(Stage);
         Controls.Add(body); Controls.Add(status); Controls.Add(strip);
         Stage.Controls.Add(Home);
         status.Visible=false;
@@ -416,7 +416,7 @@ internal sealed class WorkspaceStrip : Control
     {var p=new GraphicsPath();float d=radius*2;p.AddArc(r.Left,r.Top,d,d,180,90);p.AddArc(r.Right-d,r.Top,d,d,270,90);p.AddArc(r.Right-d,r.Bottom-d,d,d,0,90);p.AddArc(r.Left,r.Bottom-d,d,d,90,90);p.CloseFigure();return p;}
     protected override void OnPaint(PaintEventArgs e)
     {
-        var g=e.Graphics;g.SmoothingMode=SmoothingMode.AntiAlias;rectangles.Clear();bool changing=false;float h=Height/Unit;g.ScaleTransform(Unit,Unit);
+        var g=e.Graphics;g.SmoothingMode=SmoothingMode.AntiAlias;rectangles.Clear();bool changing=false;float h=Height/Unit-4;g.ScaleTransform(Unit,Unit);
         using(var b=new LinearGradientBrush(new RectangleF(0,0,LogicalWidth,h),Color.FromArgb(47,48,54),Color.FromArgb(26,27,32),90))g.FillRectangle(b,0,0,LogicalWidth,h);
         g.DrawImage(SuiteHost.Brand,12,(h-24)/2,38,24);WilsonHome.Text(g,"AWcontrol",new RectangleF(60,0,126,h),16,Color.White,true);
         using(var p=new Pen(Color.FromArgb(90,140,139,140)))g.DrawLine(p,BrandWidth-12,12,BrandWidth-12,h-12);

@@ -180,7 +180,7 @@ internal static class WorkspaceTests
     private static void CheckHome(SuiteHost host,string folder)
     {
         host.MaximumSize=new Size(4096,4096);host.Size=new Size(1440,900);
-        Require(host.Stage.Left==host.Stage.Top&&host.Stage.Left==host.Stage.Parent.ClientSize.Width-host.Stage.Right&&host.Stage.Top==host.Stage.Parent.ClientSize.Height-host.Stage.Bottom,"document frame must have equal spacing on all four sides");
+        Require(host.Stage.Bounds==host.Stage.Parent.ClientRectangle,"page must fill the body without an external margin");
         var header=host.Controls.OfType<WorkspaceStrip>().Single();var down=typeof(WorkspaceStrip).GetMethod("OnMouseDown",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic);down.Invoke(header,new object[]{new MouseEventArgs(MouseButtons.Left,2,80,16,0)});Require(host.WindowState==FormWindowState.Maximized,"double-clicking header must maximize");down.Invoke(header,new object[]{new MouseEventArgs(MouseButtons.Left,2,80,16,0)});Require(host.WindowState==FormWindowState.Normal,"double-clicking header again must restore");
         string[] names={"TOPS SANKHYA.xlsx","Relatório mensal.docx","Controle de estoque.xlsx","Proposta comercial.docx"};
         foreach(string name in names){string path=Path.Combine(folder,name);File.WriteAllText(path,"Home fixture");host.Home.AddRecent(path);}
@@ -205,11 +205,11 @@ internal static class WorkspaceTests
         var strip=host.Controls.OfType<WorkspaceStrip>().Single();var homeBounds=host.Home.Bounds;var stripBounds=strip.Bounds;
         try
         {
-            host.Home.Dock=DockStyle.None;strip.Dock=DockStyle.None;strip.SetBounds(0,0,1440,36);host.Home.SetBounds(0,0,1424,848);host.Home.Refresh();
+            host.Home.Dock=DockStyle.None;strip.Dock=DockStyle.None;strip.SetBounds(0,0,1440,40);host.Home.SetBounds(0,0,1440,860);host.Home.Refresh();
             Require(host.Home.ActionBounds("modelbudget").IsEmpty&&host.Home.ActionBounds("manage").IsEmpty,"Home must keep templates and application management off the main canvas");
             Require(host.Home.ActionBounds("recent").Width>0,"all recent files must remain accessible in the sidebar");
-            using(var top=new Bitmap(1440,36))using(var body=new Bitmap(1424,848))using(var image=new Bitmap(1440,900))
-            {strip.DrawToBitmap(top,new Rectangle(Point.Empty,top.Size));host.Home.DrawToBitmap(body,new Rectangle(Point.Empty,body.Size));using(var g=Graphics.FromImage(image)){g.Clear(Color.FromArgb(235,232,230));g.DrawImageUnscaled(top,0,0);g.DrawImageUnscaled(body,8,44);}image.Save(Path.Combine(folder,"home-reference-wide.png"));}
+            using(var top=new Bitmap(1440,40))using(var body=new Bitmap(1440,860))using(var image=new Bitmap(1440,900))
+            {strip.DrawToBitmap(top,new Rectangle(Point.Empty,top.Size));host.Home.DrawToBitmap(body,new Rectangle(Point.Empty,body.Size));using(var g=Graphics.FromImage(image)){g.Clear(Color.FromArgb(235,232,230));g.DrawImageUnscaled(top,0,0);g.DrawImageUnscaled(body,0,40);}image.Save(Path.Combine(folder,"home-reference-wide.png"));}
         }
         finally{host.Home.Bounds=homeBounds;strip.Bounds=stripBounds;host.Home.Dock=DockStyle.Fill;strip.Dock=DockStyle.Top;host.PerformLayout();}
     }
