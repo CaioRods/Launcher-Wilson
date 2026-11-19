@@ -172,6 +172,8 @@ internal static class WorkspaceTests
             Require(before.Left==after.Left&&before.Top==after.Top&&before.Right==after.Right&&before.Bottom==after.Bottom,"dragging the editor header must not move its hosted page");
             KeyboardTest.HeaderDoubleClick(page.Window);await Task.Delay(350);Native.GetWindowRect(page.Window,out after);Require(before.Left==after.Left&&before.Top==after.Top&&before.Right==after.Right&&before.Bottom==after.Bottom,"double-clicking the editor header must not maximize its hosted page");
             Require((Native.GetWindowLongPtr(page.Window,-20).ToInt64()&0x00040000L)==0,"hosted editor must not advertise its own taskbar button");
+            // Clicking the Word title legitimately opens Rename; dismiss it before testing page input.
+            KeyboardTest.Key(0x1B);await Task.Delay(350);
         }
         host.SelectPage(second);Console.WriteLine("Hosted Excel/Word headers stay fixed and taskbar styles are hidden");return true;
     }

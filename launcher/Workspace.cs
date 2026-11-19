@@ -574,7 +574,7 @@ internal static class Native
         ShowWindowAsync(window,0);SetParent(window,IntPtr.Zero);long style=GetWindowLongPtr(window,-16).ToInt64();SetWindowLongPtr(window,-16,new IntPtr((style&~0xC1000000L)|0x00CF0000L));
         SetWindowLongPtr(window,-8,IntPtr.Zero); // Independent windows must not retain the workspace as owner.
         long ex=GetWindowLongPtr(window,-20).ToInt64();SetWindowLongPtr(window,-20,new IntPtr((ex&~0x00000080L)|0x00040000L));
-        SetWindowPos(window,IntPtr.Zero,bounds.X,bounds.Y,bounds.Width,bounds.Height,0x4034);return GetParent(window)==IntPtr.Zero;
+        SetWindowPos(window,IntPtr.Zero,bounds.X,bounds.Y,bounds.Width,bounds.Height,0x4034);return IsWindow(window)&&GetParent(window)==IntPtr.Zero;
     }
     [StructLayout(LayoutKind.Sequential)] internal struct RECT { internal int Left,Top,Right,Bottom; }
     [StructLayout(LayoutKind.Sequential)] internal struct POINT { internal int X,Y; }
