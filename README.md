@@ -24,3 +24,5 @@ Use **Buscar atualizações** para consultar as Releases do [Excel AW](https://g
 A central usa C# e Windows Forms. O workflow **Central Alimentos Wilson** compila a central, gera os MSIs das revisões fixadas do Excel AW e do Word AW usando Rust e WiX, e reúne os três executáveis de instalação em um ZIP.
 
 A central redimensiona os editores somente quando a área disponível muda. As animações suaves ficam nas abas e nos cartões, sem movimentar a janela inteira do documento. Menus permanecem vivos durante o processamento do clique e são liberados com o controle proprietário.
+
+O nome do executável é `AWcontrol.exe`. Aplicativos abre uma página na central. Clique com o botão direito em uma aba para salvar, salvar como, renomear, destacar ou fechar. Arrastar a aba para fora mostra a indicação de janela separada; soltar destaca o mesmo editor sem recriar o documento. O cabeçalho interno dos editores é fixo enquanto hospedado. Somente a central fica na barra de tarefas nesse modo; uma janela destacada recupera o ícone do editor.

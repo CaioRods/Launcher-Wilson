@@ -21,3 +21,8 @@ usuários pede a permissão de administrador do Windows. O pacote permite
 instalar sem internet; Buscar atualizações consulta as Releases no GitHub.
 
 Windows 10 ou 11 x64. Mantenha a pasta instaladores ao lado do executável.
+
+Aplicativos é uma página dentro do AWcontrol. Use o botão direito na aba para
+salvar, salvar como, renomear, destacar ou fechar. Arraste a aba para fora e solte
+quando aparecer a indicação para abrir em janela separada. O documento e suas
+alterações permanecem no mesmo editor, sem precisar salvar para destacar.

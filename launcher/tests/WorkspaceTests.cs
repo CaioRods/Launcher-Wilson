@@ -31,7 +31,7 @@ internal static class WorkspaceTests
         string word=Path.Combine(folder,"relatório de teste.txt"),excel=Path.Combine(folder,"tabela de teste.csv");
         File.WriteAllText(word,"Documento de teste do AWcontrol.");File.WriteAllText(excel,"Produto,Quantidade\nTeste,3\n");
         if(!real)File.WriteAllText(word+".keep","");
-        string failure=null;int phase=0;var timeout=Stopwatch.StartNew();var since=Stopwatch.StartNew();EditorPage first=null,second=null;int dragStep=0;Task<bool> detachTask=null;Task<bool> fixedHeaders=null;
+        string failure=null;int phase=0;var timeout=Stopwatch.StartNew();var since=Stopwatch.StartNew();EditorPage first=null,second=null;int dragStep=0;Task<bool> detachTask=null;Task<bool> fixedHeaders=null;bool excelDetached=false;
         var all=new System.Collections.Generic.List<Process>();
         try
         {
@@ -54,6 +54,7 @@ internal static class WorkspaceTests
                         if(phase==1 && host.Pages.Count==2 && host.Pages.All(p=>p.Window!=IntPtr.Zero && Native.IsWindow(p.Window) && Native.GetParent(p.Window)==host.Stage.Handle && p.Attached.ElapsedMilliseconds>1000))
                         {
                             Require(host.Pages.All(p=>Native.GetParent(p.Window)==host.Stage.Handle),"editor must remain a real child of the workspace after its first rendered frame");
+                            var bar=host.Controls.OfType<WorkspaceStrip>().Single();var up=typeof(WorkspaceStrip).GetMethod("OnMouseUp",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic);up.Invoke(bar,new object[]{new MouseEventArgs(MouseButtons.Right,1,312,15,0)});Require(bar.TabMenu.Visible&&bar.TabMenu.Items.Count==7,"right-clicking a tab must expose document actions");bar.TabMenu.Close();Require(!bar.TabMenu.IsDisposed,"tab actions menu must remain reusable");
                             host.SelectPage(first);Eventually(()=>Native.IsWindowVisible(first.Window)&&!Native.IsWindowVisible(second.Window),"tab switching must show only the selected editor");
                             host.SelectPage(null);Eventually(()=>!Native.IsWindowVisible(first.Window)&&!Native.IsWindowVisible(second.Window),"Home must hide both editors");
                             host.SelectPage(second);host.Size=new Size(1040,680);host.Reorder(second,0);Require(host.Pages[0]==second,"drag order must retain page identity");phase=2;Console.WriteLine("Both editors attached and switched");since.Restart();return;
@@ -98,8 +99,17 @@ internal static class WorkspaceTests
                             if(!real){Require(!second.Process.HasExited,"Cancel must keep the editor and its document alive");File.Delete(word+".keep");host.ClosePage(second);}
                             phase=4;Console.WriteLine("Closing initial Word page");return;
                         }
+                        if(phase==32&&detachTask.IsCompleted)
+                        {
+                            Require(detachTask.Result&&Native.GetParent(first.Window)==IntPtr.Zero,"Excel must detach as an independent editor");CaptureNative(first.Window,"real-excel-detached");Console.WriteLine("Excel detached without restarting its process");Native.PostMessage(first.Window,0x0010,IntPtr.Zero,IntPtr.Zero);phase=33;since.Restart();return;
+                        }
+                        if(phase==33&&first.Process.HasExited)
+                        {host.OpenDocument(0,null);first=host.Pages[0];all.Add(first.Process);excelDetached=true;phase=34;since.Restart();return;}
+                        if(phase==34&&first.Window!=IntPtr.Zero&&Native.GetParent(first.Window)==host.Stage.Handle&&first.Attached.ElapsedMilliseconds>1000){phase=4;return;}
                         if(phase==4 && host.Pages.Count==1 && (!real||second.Process.HasExited))
                         {
+                            if(real&&!excelDetached){detachTask=host.DetachPage(first,new Point(120,120));phase=32;since.Restart();return;}
+
                             // Same path through the live broker as a second AWcontrol invocation.
                             var send=Task.Run(()=>WorkspaceBroker.Forward(new[]{excel,word}));
                             send.ContinueWith(t=>{if(!t.Result)failure="broker did not acknowledge forwarded files";});phase=5;Console.WriteLine("Forwarding two files");return;
