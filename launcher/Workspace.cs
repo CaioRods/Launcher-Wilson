@@ -281,7 +281,7 @@ internal sealed class SuiteHost : Form
         ClosePage(ActivePage??Pages[0]);closeAll=true;
     }
     internal void ManageApps(){SelectPage(null);Home.Navigate("apps");}
-    internal void ToggleMaximized(){WindowState=WindowState==FormWindowState.Maximized?FormWindowState.Normal:FormWindowState.Maximized;}
+    internal void ToggleMaximized(){strip.ResetCaptionClick();WindowState=WindowState==FormWindowState.Maximized?FormWindowState.Normal:FormWindowState.Maximized;}
     internal async Task<bool> DetachPage(EditorPage page,Point location)
     {
         if(!Pages.Contains(page)||page.Attaching||page.Detaching||page.Window==IntPtr.Zero||page.CommandBusy)return false;
@@ -360,6 +360,9 @@ internal sealed class WorkspaceStrip : Control
     private EditorPage pressed,hotPage;
     private Point press;
     private bool moving,outside;
+    private readonly Stopwatch captionClick=new Stopwatch();
+    private Point captionPoint;
+    internal void ResetCaptionClick(){captionClick.Reset();}
     private EditorPage menuPage;
     internal readonly ContextMenuStrip TabMenu=new ContextMenuStrip();
     private float offset;
@@ -445,7 +448,12 @@ internal sealed class WorkspaceStrip : Control
     protected override void OnMouseDown(MouseEventArgs e)
     {
         base.OnMouseDown(e);if(e.Button!=MouseButtons.Left)return;
-        if(CaptionAt(e.Location)){if(e.Clicks==2)host.ToggleMaximized();else{Native.ReleaseCapture();Native.SendMessage(host.Handle,0xA1,new IntPtr(2),IntPtr.Zero);}return;}
+        if(CaptionAt(e.Location))
+        {
+            var screen=PointToScreen(e.Location);var tolerance=SystemInformation.DoubleClickSize;
+            bool twice=e.Clicks==2||captionClick.IsRunning&&captionClick.ElapsedMilliseconds<=SystemInformation.DoubleClickTime&&Math.Abs(screen.X-captionPoint.X)<=Math.Max(2,tolerance.Width/2)&&Math.Abs(screen.Y-captionPoint.Y)<=Math.Max(2,tolerance.Height/2);
+            if(twice)host.ToggleMaximized();else{captionPoint=screen;captionClick.Restart();Native.ReleaseCapture();Native.SendMessage(host.Handle,0xA1,new IntPtr(2),IntPtr.Zero);}return;
+        }
         pressed=PageAt(e.Location);press=new Point((int)(e.X/Unit),(int)(e.Y/Unit));moving=outside=false;if(pressed!=null)Capture=true;
     }
     protected override void OnMouseMove(MouseEventArgs e)
