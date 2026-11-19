@@ -44,6 +44,8 @@ internal sealed class WilsonHome : Control
     private readonly HashSet<string> pendingDates=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     private readonly System.Threading.SemaphoreSlim dateSlots=new System.Threading.SemaphoreSlim(3);
     private Point menuPoint;
+    private string menuFile;
+    internal readonly ContextMenuStrip FileActions=new ContextMenuStrip();
     internal bool Animations {get{return preferences.Animations && SystemInformation.IsMenuAnimationEnabled;}}
     internal string Page {get{return page;}}
     internal string SearchText {get{return search.Text;}set{search.Text=value;}}
@@ -63,7 +65,11 @@ internal sealed class WilsonHome : Control
             foreach(string key in hover.Keys.ToArray()){float target=key==hot||key==hotGroup?1:0;float next=Animations?hover[key]+(target-hover[key])*0.24f:target;if(Math.Abs(next-target)<0.015f)next=target;if(next!=hover[key])changed=true;hover[key]=next;if(next==0 && key!=hot)hover.Remove(key);}
             Invalidate();if(!changed)animation.Stop();
         };
-        Disposed+=(s,e)=>animation.Dispose();
+        FileActions.Items.Add("Abrir",null,(s,e)=>{if(menuFile!=null)host.OpenDocument(SuiteHost.Kind(menuFile),menuFile);});
+        FileActions.Items.Add("Adicionar aos favoritos",null,(s,e)=>{if(menuFile!=null)ToggleFavorite(menuFile);});
+        FileActions.Items.Add("Remover dos recentes",null,(s,e)=>{if(menuFile!=null){recent.Remove(menuFile);if(!host.Testing)SaveRecent();Invalidate();}});
+        Disposed+=(s,e)=>{animation.Dispose();FileActions.Dispose();};
+        VisibleChanged+=(s,e)=>{if(!Visible){animation.Stop();hover.Clear();hot=hotGroup="";}};
         if(!owner.Testing)ReadState();
     }
     [System.Runtime.InteropServices.DllImport("user32.dll",EntryPoint="SendMessageW",CharSet=System.Runtime.InteropServices.CharSet.Unicode)]
@@ -194,42 +200,27 @@ internal sealed class WilsonHome : Control
     private void DrawWork(Graphics g,float x,float width)
     {
         string first=person.Split(new[]{' '},StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();int hour=DateTime.Now.Hour;string greeting=(hour<12?"Bom dia":hour<18?"Boa tarde":"Boa noite")+(first==null?".":", "+first+".");
-        Header(g,x,width>980?width-Math.Min(450,width*.46f)-24:width,page=="home"?greeting:page=="models"?"Modelos para começar.":page=="favorites"?"Seus favoritos.":"Arquivos recentes.","Seu trabalho, em um só lugar.");
+        Header(g,x,width>980?width-Math.Min(450,width*.46f)-24:width,page=="home"?greeting:page=="models"?"Modelos para começar.":page=="favorites"?"Seus favoritos.":"Arquivos recentes.","Crie ou abra um arquivo.");
         float top=SearchBox(g,x,width);
         if(page=="models"){DrawModelGallery(g,x,top,width);return;}
         if(page!="home"){float height=DrawRecent(g,x,top,width,false);contentHeight=top+height+30;return;}
-        var hero=new RectangleF(x,top,width,118);using(var path=WorkspaceStrip.Round(hero,14))using(var brush=new LinearGradientBrush(hero,Color.FromArgb(255,245,225),Color.FromArgb(255,225,162),0f))g.FillPath(brush,path);
-        var state=g.Save();using(var clip=WorkspaceStrip.Round(hero,14))g.SetClip(clip);
-        if(width>=760)DrawHeroArt(g,new RectangleF(hero.Right-245,top+2,245,116));g.Restore(state);
-        Fill(g,new RectangleF(x+28,top+25,4,68),Color.FromArgb(241,178,25),2);Text(g,"O que vamos criar hoje?",new RectangleF(x+48,top+17,width-(width>=760?270:85),43),width<700?26:30,Color.FromArgb(112,12,27),true);Text(g,"Planilhas e documentos conectados ao seu dia.",new RectangleF(x+48,top+62,width-(width>=760?260:80),29),width<700?14:17,Color.FromArgb(83,77,75),true);
-        float cardY=top+134;bool pair=width>=690;float cardWidth=pair?(width-18)/2:width;
-        AppCard(g,new RectangleF(x,cardY,cardWidth,142),0);AppCard(g,new RectangleF(pair?x+cardWidth+18:x,pair?cardY:cardY+158,cardWidth,142),1);
-        float rowsY=cardY+(pair?160:318);bool aside=width>=900;float tableWidth=aside?width-288:width;
-        float rowsH=DrawRecent(g,x,rowsY,tableWidth,true);
-        if(aside)DrawModelsAside(g,new RectangleF(x+tableWidth+18,rowsY,270,rowsH));
-        float footerY=rowsY+rowsH+18;DrawAppStatus(g,new RectangleF(x,footerY,width,74));contentHeight=footerY+98;
-    }
-    private static void DrawHeroArt(Graphics g,RectangleF r)
-    {
-        using(var wave=new GraphicsPath()){wave.AddBezier(r.Left-65,r.Bottom,r.Left+40,r.Y+10,r.Right-65,r.Bottom+30,r.Right+15,r.Top+24);wave.AddLine(r.Right+15,r.Top+24,r.Right+15,r.Bottom);wave.CloseFigure();using(var b=new SolidBrush(Color.FromArgb(165,188,18,33)))g.FillPath(b,wave);}
-        for(int n=0;n<2;n++){var s=g.Save();g.TranslateTransform(r.Left+45+n*83,r.Top+25-n*15);g.RotateTransform(n==0?10:-9);Fill(g,new RectangleF(0,0,94,120),Color.FromArgb(110,194,129,42),8);Fill(g,new RectangleF(0,-3,92,117),Color.FromArgb(255,253,246),8);Fill(g,new RectangleF(10,10,72,13),Color.FromArgb(180,45,48),3);using(var pen=new Pen(Color.FromArgb(205,174,143))){for(int k=0;k<5;k++)g.DrawLine(pen,10,35+k*13,82,35+k*13);if(n==0)for(int k=0;k<4;k++)g.DrawLine(pen,10+k*24,30,10+k*24,100);}g.Restore(s);}
+        bool pair=width>=690;float cardWidth=pair?(width-18)/2:width;
+        AppCard(g,new RectangleF(x,top,cardWidth,118),0);AppCard(g,new RectangleF(pair?x+cardWidth+18:x,pair?top:top+134,cardWidth,118),1);
+        float rowsY=top+(pair?142:276);float rowsH=DrawRecent(g,x,rowsY,width,true);
+        Link(g,"allrecent",new RectangleF(x+width-155,rowsY+rowsH+8,155,32),"Ver todos os recentes ›",Color.FromArgb(130,18,33),()=>Navigate("recent"));
+        contentHeight=rowsY+rowsH+56;
     }
     private void AppCard(Graphics g,RectangleF r,int app)
     {
         string id="app"+app;var group=r;group.Y-=offset;groups[id]=group;float lift=Animations?Hot(id):0;r.Y-=lift;Card(g,r,id);
-        bool compact=r.Width<460;
-        g.DrawImage(SuiteHost.Logos[app],r.X+(compact?18:22),r.Y+20,compact?52:64,compact?52:64);
-        float left=r.X+(compact?84:122),w=r.Right-left-20;Color accent=app==0?Color.FromArgb(170,8,33):Color.FromArgb(168,111,8);
-        if(!compact)using(var p=new Pen(Color.FromArgb(219,214,210)))g.DrawLine(p,r.X+104,r.Y+22,r.X+104,r.Y+78);
-        Text(g,Distribution.Names[app],new RectangleF(left,r.Y+12,w,40),compact?24:27,Color.FromArgb(28,26,27),true);
-        string description=compact?(app==0?"Planilhas e dados organizados.":"Textos, relatórios e ideias."):(app==0?"Organize dados. Transforme ideias em resultados.":"Dê forma aos seus textos e relatórios.");
-        Text(g,description,new RectangleF(left,r.Y+49,w,28),13,Color.FromArgb(90,86,88));
-        float actionLeft=compact?r.X+18:left,actionWidth=compact?r.Width-36:w,buttonWidth=Math.Min(186,actionWidth*.57f);
-        ActionButton(g,id+"new",new RectangleF(actionLeft,r.Y+91,buttonWidth,36),app==0?"Nova planilha":"Novo documento",accent,()=>host.OpenDocument(app,null));
-        Link(g,id+"open",new RectangleF(actionLeft+buttonWidth+12,r.Y+91,actionWidth-buttonWidth-12,36),app==0?"Abrir planilha":"Abrir documento",accent,()=>host.OpenPicker(app));
-        // The card itself gets a subtle edge/lift; only explicit actions create files.
-        Hit(id,new RectangleF(r.X+8,r.Y+8,96,r.Height-16),Distribution.Names[app],()=>host.OpenDocument(app,null));
+        float left=r.X+88;Color accent=app==0?Color.FromArgb(170,8,33):Color.FromArgb(168,111,8);
+        g.DrawImage(SuiteHost.Logos[app],r.X+22,r.Y+17,48,48);
+        Text(g,Distribution.Names[app],new RectangleF(left,r.Y+16,r.Width-110,34),25,Color.FromArgb(28,26,27),true);
+        float actionWidth=r.Width-40,buttonWidth=Math.Min(186,actionWidth*.57f);
+        ActionButton(g,id+"new",new RectangleF(r.X+20,r.Y+68,buttonWidth,34),app==0?"Nova planilha":"Novo documento",accent,()=>host.OpenDocument(app,null));
+        Link(g,id+"open",new RectangleF(r.X+buttonWidth+32,r.Y+68,actionWidth-buttonWidth-12,34),app==0?"Abrir planilha":"Abrir documento",accent,()=>host.OpenPicker(app));
     }
+
     private float DrawRecent(Graphics g,float x,float y,float width,bool compact)
     {
         var files=FilteredFiles();int count=compact?Math.Min(files.Length,preferences.Grid?4:5):files.Length;float body=preferences.Grid?Math.Max(154,(float)Math.Ceiling(count/(width>=700?3f:2f))*132):Math.Max(168,count*40+44);float height=body+60;
@@ -267,13 +258,12 @@ internal sealed class WilsonHome : Control
     }
     private void FileMenu(string path)
     {
-        var menu=new ContextMenuStrip();menu.Items.Add("Abrir",null,(s,e)=>host.OpenDocument(SuiteHost.Kind(path),path));menu.Items.Add(Favorite(path)?"Remover dos favoritos":"Adicionar aos favoritos",null,(s,e)=>ToggleFavorite(path));menu.Items.Add("Remover dos recentes",null,(s,e)=>{recent.Remove(path);if(!host.Testing)SaveRecent();Invalidate();});menu.Closed+=(s,e)=>menu.Dispose();menu.Show(this,menuPoint);
+        menuFile=path;FileActions.Items[1].Text=Favorite(path)?"Remover dos favoritos":"Adicionar aos favoritos";
+        // Keep the menu alive until the owning Home is disposed. Disposing on Closed can
+        // interrupt ToolStrip's own OnItemClicked/reparent handling and recreate a dead HWND.
+        FileActions.Show(this,menuPoint);
     }
-    private void DrawModelsAside(Graphics g,RectangleF r)
-    {
-        Card(g,r);Icon(g,"file",new RectangleF(r.X+16,r.Y+19,20,22),Color.FromArgb(130,18,33));Text(g,"Comece com um modelo",new RectangleF(r.X+45,r.Y+10,r.Width-57,38),17,Color.FromArgb(35,29,31),true);Line(g,r.X+20,r.Y+53,r.Right-20,Color.FromArgb(224,216,212));
-        ModelRow(g,new RectangleF(r.X+18,r.Y+65,r.Width-36,67),0,"budget","Orçamento mensal");ModelRow(g,new RectangleF(r.X+18,r.Y+142,r.Width-36,67),1,"report","Relatório profissional");Link(g,"modelslink",new RectangleF(r.X+100,r.Bottom-44,r.Width-116,30),"Ver modelos ›",Color.FromArgb(146,19,34),()=>Navigate("models"));
-    }
+
     private void ModelRow(Graphics g,RectangleF r,int app,string key,string title)
     {
         string id="model"+key;if(Hot(id)>0)Fill(g,r,Color.FromArgb(249,239,232),8);Miniature(g,new RectangleF(r.X+2,r.Y+4,76,55),app);Text(g,title,new RectangleF(r.X+90,r.Y+8,r.Width-90,51),14,Color.FromArgb(54,43,44),true,StringAlignment.Near,true);Hit(id,r,"Criar "+title,()=>host.OpenTemplate(app,key));FocusRing(g,id,r);
@@ -285,14 +275,6 @@ internal sealed class WilsonHome : Control
         string[] keys={"budget","report","sales","letter"},names={"Orçamento mensal","Relatório profissional","Controle de vendas","Carta profissional"};int[] apps={0,1,0,1};int cols=width>900?3:2;float cw=(width-(cols-1)*18)/cols;int index=0;
         for(int i=0;i<keys.Length;i++){int k=i;if(search.Text.Length>0&&names[i].IndexOf(search.Text,StringComparison.CurrentCultureIgnoreCase)<0)continue;var r=new RectangleF(x+(index%cols)*(cw+18),y+(index/cols)*204,cw,184);Card(g,r,"model"+keys[i]);Miniature(g,new RectangleF(r.X+20,r.Y+20,r.Width-40,105),apps[i]);Text(g,names[i],new RectangleF(r.X+20,r.Y+133,r.Width-40,34),17,Color.FromArgb(85,33,36),true);Hit("model"+keys[i],r,"Criar "+names[i],()=>host.OpenTemplate(apps[k],keys[k]));index++;}
         if(index==0)Text(g,"Nenhum modelo encontrado.",new RectangleF(x,y,width,48),16,Color.DimGray);contentHeight=y+(float)Math.Ceiling(index/(double)cols)*204+30;
-    }
-    private void DrawAppStatus(Graphics g,RectangleF r)
-    {
-        Card(g,r);g.DrawImage(SuiteHost.Logos[0],r.X+18,r.Y+18,36,36);g.DrawImage(SuiteHost.Logos[1],r.X+62,r.Y+18,36,36);bool installed=host.Testing||Distribution.InstalledPath(0)!=null&&Distribution.InstalledPath(1)!=null;
-        bool update=!host.Testing&&installed&&Enumerable.Range(0,2).Any(a=>Distribution.InstalledVersion(a,false)<Distribution.BundledUpdate(a).Version);
-        Color statusColor=installed&&!update?Color.FromArgb(47,149,72):Color.FromArgb(192,130,20);using(var b=new SolidBrush(statusColor))g.FillEllipse(b,r.X+119,r.Y+24,26,26);Text(g,installed&&!update?"✓":"!",new RectangleF(r.X+119,r.Y+23,26,26),19,Color.White,true,StringAlignment.Center);
-        float textWidth=Math.Max(100,r.Width-390);Text(g,!installed?"Seus aplicativos, sempre à mão":update?"Há atualizações no pacote":"Seus aplicativos estão atualizados",new RectangleF(r.X+159,r.Y+12,textWidth,28),r.Width<900?15:18,Color.FromArgb(35,30,31),true);Text(g,!installed?"Instale o Excel AW e o Word AW para começar.":"Excel AW e Word AW prontos para uso.",new RectangleF(r.X+159,r.Y+40,textWidth,22),13,Color.DimGray);
-        ActionButton(g,"manage",new RectangleF(r.Right-213,r.Y+20,194,35),"Gerenciar aplicativos",Color.FromArgb(137,17,32),()=>host.ManageApps(),true);
     }
     private void DrawSettings(Graphics g,float x,float width)
     {

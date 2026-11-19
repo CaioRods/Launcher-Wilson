@@ -139,7 +139,11 @@ internal static class WorkspaceTests
         Require(host.Home.ActionBounds("app0new").Width>0&&host.Home.ActionBounds("app1new").Width>0,"both creation actions must be visible at desktop size");
         Require(!host.Home.ActionBounds("app0new").IntersectsWith(host.Home.ActionBounds("app1new")),"app actions must not overlap");
         CaptureHome(host,"home-reference-desktop");CaptureWideHome(host);
-        host.Home.SearchText="TOPS";host.Home.Refresh();Require(host.Home.FilteredFiles().Length==1,"search must filter real file names");host.Home.InvokeAction("favorite0");host.Home.Navigate("favorites");host.Home.SearchText="";host.Home.Refresh();Require(host.Home.FilteredFiles().Length==1,"favorites must contain only the selected file");CaptureHome(host,"home-favorites");
+        host.Home.SearchText="TOPS";host.Home.Refresh();
+        host.Home.InvokeAction("more0");var menu=host.Home.FileActions;menu.Items[1].PerformClick();menu.Close();Require(!menu.IsDisposed,"recent-file menu must survive its click/close processing");
+        host.Home.InvokeAction("more0");menu.Items[1].PerformClick();menu.Close();Require(!menu.IsDisposed,"recent-file menu must reopen after an action");
+        var strip=host.Controls.OfType<WorkspaceStrip>().Single();strip.NewFileMenu.Show(strip,Point.Empty);strip.NewFileMenu.Close();Require(!strip.NewFileMenu.IsDisposed,"new-file menu must survive close");strip.NewFileMenu.Show(strip,Point.Empty);strip.NewFileMenu.Close();
+        Require(host.Home.FilteredFiles().Length==1,"search must filter real file names");host.Home.InvokeAction("favorite0");host.Home.Navigate("favorites");host.Home.SearchText="";host.Home.Refresh();Require(host.Home.FilteredFiles().Length==1,"favorites must contain only the selected file");CaptureHome(host,"home-favorites");
         host.Home.Navigate("models");host.Home.Refresh();Require(host.Home.ActionBounds("modelbudget").Width>0,"budget model must be actionable");CaptureHome(host,"home-models");
         host.Home.Navigate("settings");host.Home.Refresh();bool before=host.Home.Animations;host.Home.InvokeAction("motion");Require(!host.Home.Animations,"reduced motion must disable transitions");host.Home.InvokeAction("motion");host.Home.Refresh();
         host.Home.Navigate("home");host.Size=new Size(820,560);host.Home.Refresh();var profile=host.Home.ActionBounds("profile");var settings=host.Home.ActionBounds("settings");Require(!profile.IntersectsWith(settings),"sidebar account and settings must not overlap at minimum height");CaptureHome(host,"home-reference-compact");
@@ -152,7 +156,8 @@ internal static class WorkspaceTests
         try
         {
             host.Home.Dock=DockStyle.None;strip.Dock=DockStyle.None;strip.SetBounds(0,0,1440,48);host.Home.SetBounds(0,0,1440,852);host.Home.Refresh();
-            Require(host.Home.ActionBounds("modelbudget").Width>0,"wide Home must include the working template sidebar");
+            Require(host.Home.ActionBounds("modelbudget").IsEmpty&&host.Home.ActionBounds("manage").IsEmpty,"Home must keep templates and application management off the main canvas");
+            Require(host.Home.ActionBounds("allrecent").Width>0,"all recent files must remain accessible");
             using(var top=new Bitmap(1440,48))using(var body=new Bitmap(1440,852))using(var image=new Bitmap(1440,900))
             {strip.DrawToBitmap(top,new Rectangle(Point.Empty,top.Size));host.Home.DrawToBitmap(body,new Rectangle(Point.Empty,body.Size));using(var g=Graphics.FromImage(image)){g.DrawImageUnscaled(top,0,0);g.DrawImageUnscaled(body,0,48);}image.Save(Path.Combine(folder,"home-reference-wide.png"));}
         }

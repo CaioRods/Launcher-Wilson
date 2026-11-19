@@ -2,7 +2,7 @@
 
 Aplicativo Windows para trabalhar com planilhas do Excel AW e documentos do Word AW em abas na mesma janela, além de instalar e atualizar os dois editores. Créditos: @CaioRods. A identidade visual utiliza o logotipo da [Alimentos Wilson](https://www.alimentoswilson.com.br/); as origens dos recursos estão em [ATTRIBUTION.md](launcher/assets/ATTRIBUTION.md).
 
-A Home reúne novos arquivos, busca, recentes, favoritos e modelos. As abas podem ser reorganizadas por arraste e fechadas individualmente, com confirmação de alterações. O perfil é compartilhado entre os editores. Com a central aberta, arquivos abertos pelo Explorer entram nela; com a central fechada, os editores continuam funcionando individualmente.
+A Home mostra as ações de criar/abrir e uma lista curta de arquivos recentes, com busca. Favoritos, modelos e gerenciamento dos aplicativos ficam no menu lateral. As abas podem ser reorganizadas por arraste e fechadas individualmente, com confirmação de alterações. O perfil é compartilhado entre os editores. Com a central aberta, arquivos abertos pelo Explorer entram nela; com a central fechada, os editores continuam funcionando individualmente.
 
 ## Instalação
 
@@ -22,3 +22,5 @@ Use **Buscar atualizações** para consultar as Releases do [Excel AW](https://g
 ## Compilação
 
 A central usa C# e Windows Forms. O workflow **Central Alimentos Wilson** compila a central, gera os MSIs das revisões fixadas do Excel AW e do Word AW usando Rust e WiX, e reúne os três executáveis de instalação em um ZIP.
+
+A central redimensiona os editores somente quando a área disponível muda. As animações suaves ficam nas abas e nos cartões, sem movimentar a janela inteira do documento. Menus permanecem vivos durante o processamento do clique e são liberados com o controle proprietário.

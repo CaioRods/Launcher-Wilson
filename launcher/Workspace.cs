@@ -28,6 +28,8 @@ internal sealed class EditorPage
     internal readonly Stopwatch Opening = Stopwatch.StartNew();
     internal readonly Stopwatch Attached = new Stopwatch();
     internal bool CloseSent, AttachFailed, Attaching;
+    internal Size LastSize=Size.Empty;
+    internal readonly Stopwatch TitleRefresh=Stopwatch.StartNew();
 }
 
 internal sealed class SuiteHost : Form
@@ -42,8 +44,7 @@ internal sealed class SuiteHost : Form
     private readonly Func<int,string> locate;
     private WorkspaceBroker broker;
     private bool closeAll, completeClose;
-    private readonly System.Windows.Forms.Timer movement=new System.Windows.Forms.Timer{Interval=16};
-    private readonly Stopwatch transition=new Stopwatch();
+    private readonly Stopwatch profileRefresh=Stopwatch.StartNew();
     internal bool Testing;
     internal string CloseStatus { get { return "closeAll="+closeAll+"; "+string.Join(" | ",Pages.Select(p=>p.Title+", requested="+p.CloseSent+", exited="+p.Process.HasExited)); } }
 
@@ -81,14 +82,13 @@ internal sealed class SuiteHost : Form
         DragEnter += (s,e) => { if(e.Data.GetDataPresent(DataFormats.FileDrop)) e.Effect=DragDropEffects.Copy; };
         DragDrop += (s,e) => { var paths=e.Data.GetData(DataFormats.FileDrop) as string[]; if(paths!=null) foreach(var p in paths) OpenDocument(Kind(p),p); };
         Stage.Resize += (s,e) => ResizeEditors();
-        poll.Tick += (s,e) => { TickEditors(); strip.RefreshProfile(); Home.UpdateProfile(strip.ProfileName,strip.Avatar); };
+        poll.Tick += (s,e) => { TickEditors(); if(profileRefresh.ElapsedMilliseconds>=1000){profileRefresh.Restart();strip.RefreshProfile();Home.UpdateProfile(strip.ProfileName,strip.Avatar);} };
         poll.Start();
-        movement.Tick+=(s,e)=>{if(ActivePage==null || ActivePage.Window==IntPtr.Zero || transition.ElapsedMilliseconds>=150){movement.Stop();ResizeEditors();return;}float t=(float)transition.ElapsedMilliseconds/150;int x=(int)(12*Math.Pow(1-t,3));Native.Resize(ActivePage.Window,x,0,Stage.ClientSize.Width,Stage.ClientSize.Height);};
         Shown += (s,e) => { MaximizedBounds=Screen.FromHandle(Handle).WorkingArea; };
         Activated += (s,e) => { if(ActivePage!=null && ActivePage.Window!=IntPtr.Zero)Native.FocusEditor(ActivePage.Window); };
         Deactivate += (s,e) => { if(ActivePage!=null && ActivePage.Window!=IntPtr.Zero)Native.EditorActive(ActivePage.Window,false); };
         FormClosing += ClosingWorkspace;
-        FormClosed += (s,e) => { poll.Dispose(); movement.Dispose(); if(broker!=null) broker.Dispose(); foreach(var p in Pages) p.Process.Dispose(); };
+        FormClosed += (s,e) => { poll.Dispose(); if(broker!=null) broker.Dispose(); foreach(var p in Pages) p.Process.Dispose(); };
     }
 
     internal static void Run(string[] args)
@@ -180,7 +180,6 @@ internal sealed class SuiteHost : Form
         if(page==null){Home.Navigate("home");Home.BringToFront();}
         else if(page.Window!=IntPtr.Zero){ Native.FocusEditor(page.Window);status.Text=page.Title; }
         ResizeEditors();strip.EnsureVisible(page);strip.Animate();
-        if(page!=null && page.Window!=IntPtr.Zero && AnimateUI){transition.Restart();movement.Start();}
     }
     internal void ClosePage(EditorPage page)
     {
@@ -193,8 +192,8 @@ internal sealed class SuiteHost : Form
     { if(index<0 || index>=Pages.Count)return;Pages.Remove(page);Pages.Insert(index,page);strip.EnsureVisible(ActivePage);strip.Animate(); }
     private void ResizeEditors()
     {
-        foreach(var p in Pages)if(p.Window!=IntPtr.Zero && !p.Attaching && !p.Process.HasExited)
-            Native.Resize(p.Window,0,0,Stage.ClientSize.Width,Stage.ClientSize.Height);
+        foreach(var p in Pages)if(p.Window!=IntPtr.Zero && !p.Attaching && !p.Process.HasExited && p.LastSize!=Stage.ClientSize)
+        {Native.Resize(p.Window,0,0,Stage.ClientSize.Width,Stage.ClientSize.Height);p.LastSize=Stage.ClientSize;}
     }
     private void TickEditors()
     {
@@ -219,9 +218,9 @@ internal sealed class SuiteHost : Form
                 }
                 else if(p.Opening.Elapsed.TotalSeconds>90)status.Text="O editor está demorando para iniciar. Aguarde ou feche esta página.";
             }
-            else
+            else if(p.TitleRefresh.ElapsedMilliseconds>=500)
             {
-                var title=new StringBuilder(512);Native.GetWindowText(p.Window,title,title.Capacity);
+                p.TitleRefresh.Restart();var title=new StringBuilder(512);Native.GetWindowText(p.Window,title,title.Capacity);
                 string name=title.ToString().Replace(" — Word AW","").Replace(" - Word AW","").Replace(" — Excel AW","").Replace(" - Excel AW","");
                 if(name.Length>0 && name!=p.Title){p.Title=name;strip.Animate();}
             }
@@ -236,7 +235,7 @@ internal sealed class SuiteHost : Form
     {
         // Keep the candidate across winit's startup transitions. Cross-process parent/style
         // calls can wait for the editor's UI thread; let our own message loop keep running.
-        page.Window=window;page.Attaching=true;IntPtr stage=Stage.Handle;
+        page.Window=window;page.Attaching=true;page.LastSize=Size.Empty;IntPtr stage=Stage.Handle;
         Task.Run(()=>
         {
             if(Testing)Console.WriteLine(DateTime.UtcNow.ToString("O")+" Attaching editor "+page.App+" hwnd="+window);
@@ -254,7 +253,7 @@ internal sealed class SuiteHost : Form
                 page.AttachFailed=false;page.Attached.Restart();
                 if(Testing)Console.WriteLine("Parent attached for editor "+page.App);
                 Native.SetWindowPos(window,IntPtr.Zero,0,0,Stage.ClientSize.Width,Stage.ClientSize.Height,0x4034);
-                Native.ShowWindowAsync(window,page==ActivePage?5:0);ResizeEditors();
+                page.LastSize=Stage.ClientSize;Native.ShowWindowAsync(window,page==ActivePage?5:0);ResizeEditors();
                 if(page==ActivePage)Native.FocusEditor(window);
                 if(page.CloseSent)Native.PostMessage(window,0x0010,IntPtr.Zero,IntPtr.Zero);
                 status.Text=page.Title;
@@ -314,13 +313,16 @@ internal sealed class WorkspaceStrip : Control
     private Image avatar;
     private DateTime profileStamp;
     private string profileName="Conta",lastTip="";
+    internal readonly ContextMenuStrip NewFileMenu=new ContextMenuStrip();
     private readonly ToolTip tip=new ToolTip();
     internal string ProfileName {get{return profileName;}}
     internal Image Avatar {get{return avatar;}}
     internal WorkspaceStrip(SuiteHost owner)
     {
         host=owner;DoubleBuffered=true;SetStyle(ControlStyles.ResizeRedraw,true);BackColor=Color.FromArgb(36,37,43);
-        animation.Tick+=(s,e)=>Invalidate();Disposed+=(s,e)=>{animation.Dispose();tip.Dispose();if(avatar!=null)avatar.Dispose();};AccessibleName="Páginas do Wilson Control";
+        NewFileMenu.Items.Add("Nova planilha",null,(s,e)=>host.OpenDocument(0,null));
+        NewFileMenu.Items.Add("Novo documento",null,(s,e)=>host.OpenDocument(1,null));
+        animation.Tick+=(s,e)=>Invalidate();Disposed+=(s,e)=>{animation.Dispose();tip.Dispose();NewFileMenu.Dispose();if(avatar!=null)avatar.Dispose();};AccessibleName="Páginas do Wilson Control";
     }
     internal void RefreshProfile()
     {
@@ -384,9 +386,9 @@ internal sealed class WorkspaceStrip : Control
     }
     protected override void OnMouseMove(MouseEventArgs e)
     {
-        base.OnMouseMove(e);float x=e.X/Unit;hovered=x>=LogicalWidth-138?Math.Min(2,(int)((x-(LogicalWidth-138))/46)):-1;hotPage=x>=Start&&x<LogicalWidth-Right?rectangles.FirstOrDefault(p=>p.Value.Contains(new PointF(e.X/Unit,e.Y/Unit))).Key:null;
+        base.OnMouseMove(e);int oldHovered=hovered;var oldPage=hotPage;float x=e.X/Unit;hovered=x>=LogicalWidth-138?Math.Min(2,(int)((x-(LogicalWidth-138))/46)):-1;hotPage=x>=Start&&x<LogicalWidth-Right?rectangles.FirstOrDefault(p=>p.Value.Contains(new PointF(e.X/Unit,e.Y/Unit))).Key:null;
         if(pressed!=null&&Capture&&(moving||Math.Abs(x-press.X)>6)){moving=true;int index=Math.Max(0,Math.Min(host.Pages.Count-1,(int)((x-Start+offset)/TabWidth)));if(host.Pages.IndexOf(pressed)!=index)host.Reorder(pressed,index);}
-        string text=hotPage!=null?hotPage.Title:x>=LogicalWidth-182&&x<LogicalWidth-138?profileName:x>=LogicalWidth-Right&&x<LogicalWidth-182?"Novo documento ou planilha":"";if(text!=lastTip){lastTip=text;tip.SetToolTip(this,text);}Animate();
+        string text=hotPage!=null?hotPage.Title:x>=LogicalWidth-182&&x<LogicalWidth-138?profileName:x>=LogicalWidth-Right&&x<LogicalWidth-182?"Novo documento ou planilha":"";if(text!=lastTip){lastTip=text;tip.SetToolTip(this,text);}if(oldHovered!=hovered||oldPage!=hotPage||moving)Animate();
     }
     protected override void OnMouseLeave(EventArgs e){hovered=-1;hotPage=null;Animate();base.OnMouseLeave(e);}
     protected override void OnMouseUp(MouseEventArgs e)
@@ -396,7 +398,7 @@ internal sealed class WorkspaceStrip : Control
         if(x<Start){host.SelectPage(null);return;}
         if(x>=LogicalWidth-138){int kind=(int)((x-(LogicalWidth-138))/46);if(kind==0)host.WindowState=FormWindowState.Minimized;else if(kind==1)host.WindowState=host.WindowState==FormWindowState.Maximized?FormWindowState.Normal:FormWindowState.Maximized;else host.Close();return;}
         if(x>=LogicalWidth-182){host.SelectPage(null);host.Home.Navigate("profile");return;}
-        if(x>=LogicalWidth-Right){var menu=new ContextMenuStrip();menu.Items.Add("Nova planilha",null,(s,a)=>host.OpenDocument(0,null));menu.Items.Add("Novo documento",null,(s,a)=>host.OpenDocument(1,null));menu.Closed+=(s,a)=>menu.Dispose();menu.Show(this,new Point((int)((LogicalWidth-Right)*Unit),Height));}
+        if(x>=LogicalWidth-Right)NewFileMenu.Show(this,new Point((int)((LogicalWidth-Right)*Unit),Height));
     }
     protected override void OnDoubleClick(EventArgs e){base.OnDoubleClick(e);var physical=PointToClient(Cursor.Position);var p=new PointF(physical.X/Unit,physical.Y/Unit);if(p.X>=Start&&p.X<LogicalWidth-Right&&!rectangles.Any(r=>r.Value.Contains(p)))host.WindowState=host.WindowState==FormWindowState.Maximized?FormWindowState.Normal:FormWindowState.Maximized;}
 }
