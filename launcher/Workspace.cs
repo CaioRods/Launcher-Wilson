@@ -27,7 +27,7 @@ internal sealed class EditorPage
     internal IntPtr Window;
     internal readonly Stopwatch Opening = Stopwatch.StartNew();
     internal readonly Stopwatch Attached = new Stopwatch();
-    internal bool CloseSent, AttachFailed, Attaching, Detaching, CommandBusy;
+    internal bool CloseSent, AttachFailed, Attaching, Detaching, CommandBusy, StatePending;
     internal int ControlPort;
     internal string ControlToken;
     internal Size LastSize=Size.Empty;
@@ -232,7 +232,7 @@ internal sealed class SuiteHost : Form
             {
                 p.TitleRefresh.Restart();var title=new StringBuilder(512);Native.GetWindowText(p.Window,title,title.Capacity);
                 string name=title.ToString().Replace(" — Word AW","").Replace(" - Word AW","").Replace(" — Excel AW","").Replace(" - Excel AW","");
-                if(name.Length>0 && name!=p.Title){p.Title=name;strip.Animate();}
+                if(name.Length>0 && name!=p.Title){p.Title=name;strip.Animate();if(NativeCommands&&!p.CommandBusy&&!p.StatePending)RefreshDocumentPath(p);}
             }
         }
         if(closeAll)
@@ -298,7 +298,14 @@ internal sealed class SuiteHost : Form
             // The editor keeps its process and dirty document. Closing the central won't close it.
             detachedProcesses.Add(page.Process);return true;
         }
-        catch(Exception error){if(!(error is IOException||error is SocketException||error is AggregateException||error is InvalidOperationException))throw;page.Detaching=false;Notify("Não foi possível destacar a página. Tente novamente quando o editor terminar de iniciar.");return false;}
+        catch(Exception error){if(!(error is IOException||error is SocketException||error is AggregateException||error is InvalidOperationException||error is UnauthorizedAccessException||error is ArgumentException))throw;page.Detaching=false;Notify("Não foi possível destacar a página. Tente novamente quando o editor terminar de iniciar.");return false;}
+    }
+    private async void RefreshDocumentPath(EditorPage page)
+    {
+        page.StatePending=true;
+        try{var state=await EditorControl.Send(page,"state");object path;if(Pages.Contains(page)&&!page.Detaching&&state.TryGetValue("path",out path)){string current=path as string;if(current!=null&&!string.Equals(current,page.Path,StringComparison.OrdinalIgnoreCase)){page.Path=current;Home.AddRecent(current);}}}
+        catch(Exception error){if(!(error is IOException||error is SocketException||error is AggregateException||error is InvalidOperationException||error is UnauthorizedAccessException||error is ArgumentException))throw;}
+        finally{page.StatePending=false;}
     }
     internal async void DocumentAction(EditorPage page,string action)
     {
@@ -315,7 +322,7 @@ internal sealed class SuiteHost : Form
             await EditorControl.Send(page,action,name);var current=await EditorControl.Send(page,"state");object updated;if(current.TryGetValue("path",out updated)){page.Path=updated as string;if(page.Path!=null){if(action=="rename")Home.RenameRecent(previous,page.Path);else Home.AddRecent(page.Path);}}
             Native.FocusEditor(page.Window);
         }
-        catch(Exception error){if(!(error is IOException||error is SocketException||error is AggregateException||error is InvalidOperationException))throw;Notify("Não foi possível concluir a operação no editor.");}
+        catch(Exception error){if(!(error is IOException||error is SocketException||error is AggregateException||error is InvalidOperationException||error is UnauthorizedAccessException||error is ArgumentException))throw;Notify("Não foi possível concluir a operação no editor.");}
         finally{page.CommandBusy=false;}
     }
     internal void OpenPicker(int? app=null)
